@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* =============================================================
+   KITT — Design System Tokens
+   Todos los colores se usan como: hsl(var(--token))
+   Nunca usar colores hardcodeados tipo zinc-500, indigo-600, etc.
+   ============================================================= */
+
+:root {
+  /* Fondos */
+  --background: 0 0% 100%;
+  --surface: 0 0% 98%;
+  --surface-2: 0 0% 95%;
+
+  /* Bordes */
+  --border: 0 0% 90%;
+  --border-2: 0 0% 82%;
+
+  /* Texto */
+  --text: 0 0% 9%;
+  --text-2: 0 0% 32%;
+  --text-3: 0 0% 55%;
+
+  /* Acento — indigo */
+  --accent: 238 84% 67%;
+  --accent-hover: 238 84% 60%;
+  --accent-soft: 238 84% 67% / 0.1;
+
+  /* Estados */
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --destructive: 0 84% 60%;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Radio */
+  --radius: 0.5rem;
+}
+
+.dark {
+  /* Fondos */
+  --background: 222 14% 8%;
+  --surface: 222 14% 11%;
+  --surface-2: 222 14% 15%;
+
+  /* Bordes */
+  --border: 222 14% 20%;
+  --border-2: 222 14% 27%;
+
+  /* Texto */
+  --text: 0 0% 95%;
+  --text-2: 0 0% 70%;
+  --text-3: 0 0% 48%;
+
+  /* Acento — indigo (mismo en dark) */
+  --accent: 238 84% 67%;
+  --accent-hover: 238 84% 74%;
+  --accent-soft: 238 84% 67% / 0.15;
+
+  /* Estados */
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --destructive: 0 84% 60%;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+}
+
+/* =============================================================
+   Base
+   ============================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--text));
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Touch targets optimizados para mobile */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-2));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--text-3));
+}

@@ -1,0 +1,58 @@
+import type { ChatMessage } from "@/lib/store"
+import { ApprovalCard } from "./ApprovalCard"
+import { formatRelativeDate } from "@/lib/utils"
+
+interface MessageBubbleProps {
+  message: ChatMessage
+}
+
+export function MessageBubble({ message }: MessageBubbleProps) {
+  const isUser = message.role === "user"
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] md:max-w-[60%]">
+          <div className="bg-[hsl(var(--accent))] text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm">
+            {message.content}
+          </div>
+          <p className="text-[10px] text-[hsl(var(--text-3))] mt-1 text-right">
+            {formatRelativeDate(message.createdAt)}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Mensaje de KITT
+  const pendingActionId = message.pendingActionId
+  const metadata = message.metadata as { actionType?: string; actionPayload?: Record<string, unknown> } | undefined
+
+  return (
+    <div className="flex gap-2.5">
+      {/* Avatar KITT */}
+      <div className="h-7 w-7 rounded-full bg-[hsl(var(--surface-2))] flex items-center justify-center flex-shrink-0 mt-1">
+        <span className="text-[hsl(var(--accent))] text-xs font-bold">K</span>
+      </div>
+
+      <div className="flex-1 max-w-[80%] md:max-w-[70%]">
+        <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-[hsl(var(--text))]">
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
+
+        {/* Tarjeta de aprobación si hay acción pendiente */}
+        {pendingActionId && metadata?.actionType && (
+          <ApprovalCard
+            actionId={pendingActionId}
+            type={metadata.actionType}
+            payload={metadata.actionPayload ?? {}}
+          />
+        )}
+
+        <p className="text-[10px] text-[hsl(var(--text-3))] mt-1 ml-1">
+          {formatRelativeDate(message.createdAt)}
+        </p>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,140 @@
+// =============================================================
+// KITT — Prisma Schema
+// PostgreSQL + Prisma v6 con driver adapter (pg)
+// =============================================================
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============================================================
+// MULTI-TENANT
+// =============================================================
+
+model Tenant {
+  id             String           @id @default(cuid())
+  name           String
+  config         Json             @default("{}")
+  createdAt      DateTime         @default(now())
+
+  users          User[]
+  whatsappSession WhatsappSession?
+  gmailConnection GmailConnection?
+  conversations  Conversation[]
+  reports        Report[]
+  pendingActions PendingAction[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String?
+  name           String?
+  tenantId       String
+  onboardingDone Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// =============================================================
+// INTEGRACIONES
+// =============================================================
+
+model WhatsappSession {
+  id           String    @id @default(cuid())
+  tenantId     String    @unique
+  status       String    @default("disconnected") // disconnected | connecting | connected
+  instanceName String
+  connectedAt  DateTime?
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model GmailConnection {
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  email        String
+  accessToken  String   @db.Text
+  refreshToken String   @db.Text
+  connectedAt  DateTime @default(now())
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// =============================================================
+// CONVERSACIONES Y MENSAJES
+// =============================================================
+
+model Conversation {
+  id        String    @id @default(cuid())
+  tenantId  String
+  createdAt DateTime  @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([tenantId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           String       // user | assistant | tool
+  content        String       @db.Text
+  type           String       @default("text") // text | artifact
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+// =============================================================
+// REPORTES AUTOMÁTICOS
+// =============================================================
+
+model Report {
+  id          String   @id @default(cuid())
+  tenantId    String
+  type        String   // morning | midday | evening
+  content     String   @db.Text
+  generatedAt DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, generatedAt])
+}
+
+// =============================================================
+// ACCIONES PENDIENTES (aprobación humana obligatoria)
+// =============================================================
+
+model PendingAction {
+  id        String   @id @default(cuid())
+  tenantId  String
+  type      String   // send_email | reply_email | send_whatsapp_message
+  payload   Json
+  status    String   @default("pending") // pending | approved | rejected
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+// =============================================================
+// CONFIGURACIÓN GLOBAL (admin UI → runtime)
+// =============================================================
+
+model AppConfig {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
