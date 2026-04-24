@@ -24,6 +24,10 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Necesario detrás de proxies inversos (Easypanel, Nginx, etc.)
+  // Confía en los headers X-Forwarded-Host y X-Forwarded-Proto
+  trustHost: true,
+
   providers: [
     Credentials({
       name: "credentials",

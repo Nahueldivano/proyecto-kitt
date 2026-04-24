@@ -2,14 +2,12 @@
 
 import { useState } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
 export default function RegisterPage() {
-  const router = useRouter()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -44,8 +42,8 @@ export default function RegisterPage() {
         redirect: false,
       })
 
-      router.push("/onboarding")
-      router.refresh()
+      // Hard navigation post-registro (mismo motivo que login)
+      window.location.href = "/onboarding"
     } catch {
       setError("Error de conexión. Intentá de nuevo.")
       setLoading(false)

@@ -1,69 +1,73 @@
-import { getToken } from "next-auth/jwt"
+import { auth } from "@/auth"
 import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
 
-// Edge runtime — no usar auth() de next-auth acá, usar getToken()
-export async function middleware(req: NextRequest) {
-  const isSecure = req.nextUrl.protocol === "https:" || process.env.NEXTAUTH_URL?.startsWith("https:") || process.env.AUTH_URL?.startsWith("https:")
-  const salt = isSecure ? "__Secure-authjs.session-token" : "authjs.session-token"
-  
-  const token = await getToken({ 
-    req, 
-    secret: process.env.AUTH_SECRET,
-    salt 
-  })
-  const { pathname } = req.nextUrl
+/**
+ * NextAuth v5: usar auth() como middleware, NO getToken() de next-auth/jwt.
+ * auth() internamente maneja el nombre de cookie (__Secure-authjs.session-token
+ * vs authjs.session-token) y respeta AUTH_TRUST_HOST / trustHost para proxies.
+ */
+export default auth(function middleware(req) {
+  const { nextUrl } = req
+  const { pathname } = nextUrl
 
-  // Rutas internas — no requieren token de usuario (tienen su propia auth)
+  // req.auth es el objeto Session tal como lo devuelve el session callback
+  const session = req.auth
+  const isLoggedIn = !!session
+  const user = session?.user as
+    | { onboardingDone?: boolean; email?: string | null }
+    | undefined
+  const onboardingDone = user?.onboardingDone ?? false
+
+  // ── Rutas internas (n8n, webhooks internos) ──────────────────
   if (pathname.startsWith("/api/internal/")) {
     return NextResponse.next()
   }
 
-  // Rutas de auth pública — si ya está logueado, redirigir
+  // ── Rutas de auth pública ─────────────────────────────────────
   if (pathname.startsWith("/login") || pathname.startsWith("/register")) {
-    if (token) {
-      const dest = token.onboardingDone ? "/chat" : "/onboarding"
-      return NextResponse.redirect(new URL(dest, req.url))
+    if (isLoggedIn) {
+      const dest = onboardingDone ? "/chat" : "/onboarding"
+      return NextResponse.redirect(new URL(dest, nextUrl))
     }
     return NextResponse.next()
   }
 
-  // Rutas protegidas — requieren login
+  // ── Rutas protegidas — requieren login ────────────────────────
   const protectedPaths = ["/chat", "/history", "/settings", "/onboarding", "/admin"]
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p))
 
-  if (isProtected && !token) {
-    const loginUrl = new URL("/login", req.url)
+  if (isProtected && !isLoggedIn) {
+    const loginUrl = new URL("/login", nextUrl)
     loginUrl.searchParams.set("callbackUrl", pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // Admin — requiere email específico
+  // ── Admin ─────────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
     const adminEmail = process.env.KITT_ADMIN_EMAIL
-    if (!adminEmail || token?.email !== adminEmail) {
-      return NextResponse.redirect(new URL("/chat", req.url))
+    if (!adminEmail || user?.email !== adminEmail) {
+      return NextResponse.redirect(new URL("/chat", nextUrl))
     }
   }
 
-  // Onboarding — si ya lo completó, redirigir al chat
-  if (pathname.startsWith("/onboarding") && token?.onboardingDone) {
-    return NextResponse.redirect(new URL("/chat", req.url))
+  // ── Onboarding ya completado → chat ──────────────────────────
+  if (pathname.startsWith("/onboarding") && isLoggedIn && onboardingDone) {
+    return NextResponse.redirect(new URL("/chat", nextUrl))
   }
 
-  // Chat/settings/history — si no completó onboarding, redirigir
+  // ── App sin onboarding → onboarding ──────────────────────────
   if (
     (pathname.startsWith("/chat") ||
       pathname.startsWith("/history") ||
       pathname.startsWith("/settings")) &&
-    token &&
-    !token.onboardingDone
+    isLoggedIn &&
+    !onboardingDone
   ) {
-    return NextResponse.redirect(new URL("/onboarding", req.url))
+    return NextResponse.redirect(new URL("/onboarding", nextUrl))
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: [

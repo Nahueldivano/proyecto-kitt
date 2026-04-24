@@ -2,14 +2,12 @@
 
 import { useState } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -33,8 +31,10 @@ export default function LoginPage() {
       return
     }
 
-    router.push("/chat")
-    router.refresh()
+    // Hard navigation: fuerza un request HTTP completo para que el middleware
+    // lea la cookie de sesión recién seteada por NextAuth (evita race condition
+    // con soft-nav de router.push en App Router)
+    window.location.href = "/chat"
   }
 
   async function handleGoogle() {
