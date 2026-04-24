@@ -4,29 +4,10 @@ import Google from "next-auth/providers/google"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { encrypt } from "@/lib/crypto"
-
-// Extensión de tipos para el JWT y Session
-declare module "next-auth" {
-  interface Session {
-    user: {
-      id: string
-      email: string
-      name?: string | null
-      image?: string | null
-      tenantId: string
-      onboardingDone: boolean
-    }
-  }
-  interface JWT {
-    tenantId?: string
-    onboardingDone?: boolean
-  }
-}
+import authConfig from "./auth.config"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Necesario detrás de proxies inversos (Easypanel, Nginx, etc.)
-  // Confía en los headers X-Forwarded-Host y X-Forwarded-Proto
-  trustHost: true,
+  ...authConfig,
 
   providers: [
     Credentials({
@@ -75,6 +56,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
+    // Re-use the Edge-safe session callback from auth.config.ts
+    session: authConfig.callbacks!.session!,
+
     async signIn({ user, account }) {
       // Login con Google: crear tenant + user + guardar tokens Gmail si no existe
       if (account?.provider === "google" && user.email) {
@@ -84,14 +68,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           })
 
           if (!dbUser) {
-            // Primer login con Google — crear tenant y usuario
             const tenant = await db.tenant.create({
               data: {
                 name: user.name ?? user.email,
                 config: {
                   assistantName: "KITT",
                   tone: "professional",
-                  model: "claude-sonnet-4-5-20251001",
+                  model: "claude-sonnet-4-6",
                 },
               },
             })
@@ -106,7 +89,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             })
           }
 
-          // Guardar o actualizar tokens de Gmail
           if (account.access_token && account.refresh_token) {
             await db.gmailConnection.upsert({
               where: { tenantId: dbUser.tenantId },
@@ -135,7 +117,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async jwt({ token, user, trigger, session }) {
-      // Al hacer login, enriquecer el token con tenantId y onboardingDone
+      // Enriquecer el token en el primer login (user solo viene en ese momento)
       if (user) {
         const dbUser = await db.user.findUnique({
           where: { email: user.email! },
@@ -148,32 +130,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       // Actualizar token cuando se llama update() desde el cliente
-      if (trigger === "update" && session) {
-        if (session.onboardingDone !== undefined) {
-          token.onboardingDone = session.onboardingDone
-        }
+      if (trigger === "update" && session?.onboardingDone !== undefined) {
+        token.onboardingDone = session.onboardingDone
       }
 
       return token
     },
-
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.sub ?? ""
-        session.user.tenantId = token.tenantId as string
-        session.user.onboardingDone = token.onboardingDone as boolean
-      }
-      return session
-    },
-  },
-
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 días
   },
 })

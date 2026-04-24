@@ -53,7 +53,10 @@ export default function SettingsPage() {
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d) => setConfig(d.config ?? {}))
+      .then((d) => {
+        setConfig(d.config ?? {})
+        if (d.gmailEmail) setGmailEmail(d.gmailEmail)
+      })
       .catch(() => {})
 
     fetch("/api/whatsapp/status")

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { db } from "@/lib/db"
 import { getOAuthClient } from "@/lib/gmail"
+import { encrypt } from "@/lib/crypto"
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -34,20 +35,20 @@ export async function GET(req: NextRequest) {
     const profile = await gmail.users.getProfile({ userId: "me" })
     const email = profile.data.emailAddress ?? ""
 
-    // Guardar conexión
+    // Guardar conexión (tokens encriptados)
     await db.gmailConnection.upsert({
       where: { tenantId: session.user.tenantId },
       update: {
         email,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encrypt(tokens.access_token),
+        refreshToken: encrypt(tokens.refresh_token),
         connectedAt: new Date(),
       },
       create: {
         tenantId: session.user.tenantId,
         email,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
+        accessToken: encrypt(tokens.access_token),
+        refreshToken: encrypt(tokens.refresh_token),
       },
     })
 

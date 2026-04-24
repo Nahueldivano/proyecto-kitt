@@ -6,7 +6,7 @@ import { decrypt } from "@/lib/crypto"
 import { listUnreadEmails } from "@/lib/gmail"
 
 // =============================================================
-// GET /api/cron/sync  — llamado por el scheduler externo
+// POST /api/cron/sync  — llamado por el scheduler externo
 // Requiere: Authorization: Bearer <CRON_SECRET>
 // =============================================================
 

@@ -10,12 +10,21 @@ export async function GET() {
   }
 
   try {
-    const tenant = await db.tenant.findUnique({
-      where: { id: session.user.tenantId },
-      select: { config: true },
-    })
+    const [tenant, gmailConn] = await Promise.all([
+      db.tenant.findUnique({
+        where: { id: session.user.tenantId },
+        select: { config: true },
+      }),
+      db.gmailConnection.findUnique({
+        where: { tenantId: session.user.tenantId },
+        select: { email: true },
+      }),
+    ])
 
-    return NextResponse.json({ config: tenant?.config ?? {} })
+    return NextResponse.json({
+      config: tenant?.config ?? {},
+      gmailEmail: gmailConn?.email ?? null,
+    })
   } catch (error) {
     console.error("[settings] GET error:", error)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })

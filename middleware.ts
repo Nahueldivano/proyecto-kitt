@@ -1,11 +1,13 @@
-import { auth } from "@/auth"
+import NextAuth from "next-auth"
+import authConfig from "./auth.config"
 import { NextResponse } from "next/server"
 
 /**
- * NextAuth v5: usar auth() como middleware, NO getToken() de next-auth/jwt.
- * auth() internamente maneja el nombre de cookie (__Secure-authjs.session-token
- * vs authjs.session-token) y respeta AUTH_TRUST_HOST / trustHost para proxies.
+ * Middleware Edge-compatible: inicializado SOLO con authConfig (sin Prisma ni bcrypt).
+ * NextAuth v5 split-config pattern: https://authjs.dev/guides/edge-compatibility
  */
+const { auth } = NextAuth(authConfig)
+
 export default auth(function middleware(req) {
   const { nextUrl } = req
   const { pathname } = nextUrl

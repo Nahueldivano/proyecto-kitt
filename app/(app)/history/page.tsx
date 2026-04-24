@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { formatDate } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 
 interface Report {
   id: string
