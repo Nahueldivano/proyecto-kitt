@@ -7,12 +7,15 @@ export async function GET() {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
   }
 
-  const conversations = await db.conversation.findMany({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conversations = await (db.conversation as any).findMany({
     where: { tenantId: session.user.tenantId },
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: 150,
     select: {
       id: true,
+      title: true,
+      folderId: true,
       createdAt: true,
       messages: {
         where: { role: "user" },
@@ -24,9 +27,11 @@ export async function GET() {
   })
 
   return Response.json({
-    conversations: conversations.map((c) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    conversations: conversations.map((c: any) => ({
       id: c.id,
-      title: (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
+      title: c.title ?? (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
+      folderId: c.folderId ?? null,
       createdAt: c.createdAt.toISOString(),
     })),
   })

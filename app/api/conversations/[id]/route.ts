@@ -41,13 +41,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
   const updateData: Record<string, unknown> = {}
   if (title !== undefined && typeof title === "string") updateData.title = title.trim()
-  if (folderId !== undefined) updateData.folderId = folderId  // null = remove from folder
+  if (folderId !== undefined) updateData.folderId = folderId
 
   if (Object.keys(updateData).length === 0) {
     return new Response(JSON.stringify({ error: "Sin cambios" }), { status: 400 })
   }
 
-  await db.conversation.update({ where: { id }, data: updateData })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (db.conversation as any).update({ where: { id }, data: updateData })
   return Response.json({ ok: true })
 }
 

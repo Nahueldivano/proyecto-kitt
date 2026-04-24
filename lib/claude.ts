@@ -345,12 +345,13 @@ function buildSystemPrompt(assistantName: string, tone: string): string {
 Tono: ${tone === "professional" ? "profesional y conciso" : "amigable y cercano"}.
 
 Reglas fundamentales:
-- Nunca envíes un email o mensaje de WhatsApp sin usar primero la tool correspondiente (send_email, reply_email, send_whatsapp_message).
+- Nunca envíes un email o mensaje de WhatsApp sin usar primero la tool correspondiente.
 - Las acciones de envío SIEMPRE requieren aprobación explícita del usuario antes de ejecutarse.
 - Cuando listes emails o mensajes, presentá la información de forma clara y estructurada.
 - Si el usuario pide crear un documento, reporte o contenido visual, usá create_artifact.
-- Respondé siempre en español.
-- Sé directo y útil. No repitas información innecesaria.`
+- Respondé siempre en español argentino.
+- Sé directo y útil. No repitas información innecesaria.
+- IMPORTANTE: No uses asteriscos (* o **) para resaltar texto en tus respuestas. Usá texto plano o guiones para listas.`
 }
 
 // =============================================================
@@ -362,13 +363,16 @@ export async function chatStream(
   tenantId: string,
   conversationId: string | null,
   onChunk: (chunk: StreamChunk) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { modelOverride?: string; webSearch?: boolean }
 ): Promise<void> {
-  const { apiKey, model, assistantName, tone } = await getTenantSetup(tenantId)
+  const { apiKey, model: tenantModel, assistantName, tone } = await getTenantSetup(tenantId)
+  const model = options?.modelOverride ?? tenantModel
 
   let convId = conversationId
   if (!convId) {
-    const conv = await db.conversation.create({ data: { tenantId } })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const conv = await db.conversation.create({ data: { tenantId, model } as any })
     convId = conv.id
   }
 
@@ -379,6 +383,11 @@ export async function chatStream(
     role: m.role,
     content: m.content,
   }))
+
+  // Combinar tools personalizadas + web search nativo si está activado
+  const activeTools: Anthropic.Tool[] = options?.webSearch
+    ? ([{ type: "web_search_20250305" }, ...TOOLS] as unknown as Anthropic.Tool[])
+    : TOOLS
 
   const MAX_ITERATIONS = 10
   let iteration = 0
@@ -392,7 +401,7 @@ export async function chatStream(
       model,
       max_tokens: 4096,
       system: systemPrompt,
-      tools: TOOLS,
+      tools: activeTools,
       messages: currentMessages,
     })
 

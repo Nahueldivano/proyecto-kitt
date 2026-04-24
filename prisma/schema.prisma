@@ -26,6 +26,7 @@ model Tenant {
   whatsappSession WhatsappSession?
   gmailConnection GmailConnection?
   conversations  Conversation[]
+  folders        Folder[]
   reports        Report[]
   pendingActions PendingAction[]
 }
@@ -71,15 +72,33 @@ model GmailConnection {
 // CONVERSACIONES Y MENSAJES
 // =============================================================
 
+model Folder {
+  id        String         @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime       @default(now())
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@index([tenantId])
+}
+
 model Conversation {
   id        String    @id @default(cuid())
   tenantId  String
+  title     String?
+  folderId  String?
+  model     String?
   createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  folder    Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
   messages  Message[]
 
   @@index([tenantId])
+  @@index([folderId])
 }
 
 model Message {
