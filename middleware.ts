@@ -4,7 +4,14 @@ import type { NextRequest } from "next/server"
 
 // Edge runtime — no usar auth() de next-auth acá, usar getToken()
 export async function middleware(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET })
+  const isSecure = req.nextUrl.protocol === "https:" || process.env.NEXTAUTH_URL?.startsWith("https:") || process.env.AUTH_URL?.startsWith("https:")
+  const salt = isSecure ? "__Secure-authjs.session-token" : "authjs.session-token"
+  
+  const token = await getToken({ 
+    req, 
+    secret: process.env.AUTH_SECRET,
+    salt 
+  })
   const { pathname } = req.nextUrl
 
   // Rutas internas — no requieren token de usuario (tienen su propia auth)
