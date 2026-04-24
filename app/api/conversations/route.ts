@@ -13,8 +13,6 @@ export async function GET() {
     take: 100,
     select: {
       id: true,
-      title: true,
-      folderId: true,
       createdAt: true,
       messages: {
         where: { role: "user" },
@@ -28,9 +26,8 @@ export async function GET() {
   return Response.json({
     conversations: conversations.map((c) => ({
       id: c.id,
-      title: c.title ?? (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
+      title: (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
       createdAt: c.createdAt.toISOString(),
-      folderId: c.folderId ?? null,
     })),
   })
 }
