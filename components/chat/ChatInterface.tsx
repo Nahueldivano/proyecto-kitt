@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useRef } from "react"
 import { useChatStore } from "@/lib/store"
 import { MessageList } from "./MessageList"
 import { ChatInput } from "./ChatInput"
@@ -14,16 +14,21 @@ export function ChatInterface() {
     conversationId,
     isLoading,
     addMessage,
+    updateLastMessage,
+    patchLastMessage,
     setArtifact,
     setConversationId,
     setLoading,
   } = useChatStore()
 
+  const abortRef = useRef<AbortController | null>(null)
+  const streamedTextRef = useRef("")
+
   const handleSend = useCallback(
     async (text: string) => {
       if (isLoading) return
 
-      // Agregar mensaje del usuario inmediatamente
+      // Mensaje del usuario
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -33,60 +38,106 @@ export function ChatInterface() {
       addMessage(userMsg)
       setLoading(true)
 
+      // Placeholder del asistente (se rellena con el stream)
+      addMessage({
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        createdAt: new Date(),
+      })
+      streamedTextRef.current = ""
+
+      const controller = new AbortController()
+      abortRef.current = controller
+
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text,
-            conversationId,
-          }),
+          body: JSON.stringify({ message: text, conversationId }),
+          signal: controller.signal,
         })
 
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`)
+        if (!res.ok || !res.body) {
+          const err = await res.json().catch(() => ({ error: "Error desconocido" }))
+          updateLastMessage(err.error ?? "Error al conectar con KITT.")
+          return
         }
 
-        const data = await res.json()
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
 
-        // Actualizar conversationId si es nueva conversación
-        if (data.conversationId && data.conversationId !== conversationId) {
-          setConversationId(data.conversationId)
-        }
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-        // Agregar respuesta de KITT
-        const assistantMsg: ChatMessage = {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: data.message,
-          pendingActionId: data.pendingActionId,
-          metadata: {
-            actionType: data.actionType,
-            actionPayload: data.actionPayload,
-          },
-          createdAt: new Date(),
-        }
-        addMessage(assistantMsg)
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split("\n\n")
+          buffer = parts.pop() ?? ""
 
-        // Si hay artefacto, mostrarlo
-        if (data.artifact) {
-          setArtifact(data.artifact)
+          for (const part of parts) {
+            if (!part.startsWith("data: ")) continue
+            try {
+              const data = JSON.parse(part.slice(6))
+
+              if (data.type === "text") {
+                streamedTextRef.current += data.text
+                updateLastMessage(streamedTextRef.current)
+              } else if (data.type === "artifact") {
+                setArtifact(data.artifact)
+              } else if (data.type === "pending_action") {
+                patchLastMessage({
+                  pendingActionId: data.pendingActionId,
+                  metadata: {
+                    actionType: data.actionType,
+                    actionPayload: data.actionPayload,
+                  },
+                })
+              } else if (data.type === "done") {
+                if (data.conversationId && data.conversationId !== conversationId) {
+                  setConversationId(data.conversationId)
+                }
+                if (!streamedTextRef.current) {
+                  updateLastMessage("Procesé tu solicitud.")
+                }
+              } else if (data.type === "error") {
+                updateLastMessage(data.message ?? "Error al procesar tu mensaje.")
+              }
+            } catch {
+              // chunk malformado — ignorar
+            }
+          }
         }
-      } catch (error) {
-        const errorMsg: ChatMessage = {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          content: "Tuve un problema procesando tu mensaje. Intentá de nuevo.",
-          createdAt: new Date(),
+      } catch (err) {
+        if ((err as Error).name === "AbortError") {
+          if (!streamedTextRef.current) {
+            updateLastMessage("Respuesta cancelada.")
+          }
+        } else {
+          console.error("[chat] error:", err)
+          updateLastMessage("Tuve un problema procesando tu mensaje. Intentá de nuevo.")
         }
-        addMessage(errorMsg)
-        console.error("[chat] error:", error)
       } finally {
         setLoading(false)
+        abortRef.current = null
       }
     },
-    [isLoading, conversationId, addMessage, setArtifact, setConversationId, setLoading]
+    [
+      isLoading,
+      conversationId,
+      addMessage,
+      updateLastMessage,
+      patchLastMessage,
+      setArtifact,
+      setConversationId,
+      setLoading,
+    ]
   )
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
 
   return (
     <div className="flex h-full">
@@ -97,7 +148,12 @@ export function ChatInterface() {
           isLoading={isLoading}
           onSuggestion={handleSend}
         />
-        <ChatInput onSend={handleSend} disabled={isLoading} />
+        <ChatInput
+          onSend={handleSend}
+          onCancel={handleCancel}
+          disabled={isLoading}
+          isStreaming={isLoading}
+        />
       </div>
 
       {/* Panel de artefacto */}

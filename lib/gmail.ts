@@ -2,6 +2,7 @@ import { google } from "googleapis"
 import type { OAuth2Client } from "google-auth-library"
 import { db } from "@/lib/db"
 import { getConfig } from "@/lib/config"
+import { encrypt, decrypt } from "@/lib/crypto"
 
 // =============================================================
 // Gmail API — OAuth2
@@ -44,8 +45,8 @@ export async function getGmailClient(tenantId: string) {
 
   const client = await getOAuthClient()
   client.setCredentials({
-    access_token: connection.accessToken,
-    refresh_token: connection.refreshToken,
+    access_token: decrypt(connection.accessToken),
+    refresh_token: decrypt(connection.refreshToken),
   })
 
   // Refrescar token si es necesario
@@ -54,8 +55,8 @@ export async function getGmailClient(tenantId: string) {
       await db.gmailConnection.update({
         where: { tenantId },
         data: {
-          accessToken: tokens.access_token,
-          ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
+          accessToken: encrypt(tokens.access_token),
+          ...(tokens.refresh_token ? { refreshToken: encrypt(tokens.refresh_token) } : {}),
         },
       })
     }

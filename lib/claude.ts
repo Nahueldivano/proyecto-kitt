@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
-import { getConfig } from "@/lib/config"
 import { db } from "@/lib/db"
 import { DEFAULT_MODEL } from "@/lib/models"
+import { decrypt } from "@/lib/crypto"
 import {
   listUnreadEmails,
   readEmail,
@@ -12,7 +12,7 @@ import { sendTextMessage } from "@/lib/evolution"
 import type { Artifact } from "@/lib/store"
 
 // =============================================================
-// Tipos
+// Tipos públicos
 // =============================================================
 
 export interface ChatInput {
@@ -28,6 +28,12 @@ export interface ChatResult {
   actionPayload?: Record<string, unknown>
   conversationId: string
 }
+
+export type StreamChunk =
+  | { type: "text"; text: string }
+  | { type: "artifact"; artifact: Artifact }
+  | { type: "pending_action"; pendingActionId: string; actionType: string; actionPayload: Record<string, unknown> }
+  | { type: "done"; conversationId: string }
 
 // =============================================================
 // Definición de tools
@@ -153,7 +159,7 @@ const TOOLS: Anthropic.Tool[] = [
 ]
 
 // =============================================================
-// Ejecutor de tools
+// Ejecutor de tools (compartido)
 // =============================================================
 
 interface ToolCallResult {
@@ -193,17 +199,17 @@ async function executeTool(
     }
 
     case "send_email": {
-      // No envía — crea PendingAction para aprobación
       const payload = {
         to: toolInput.to as string,
         subject: toolInput.subject as string,
         body: toolInput.body as string,
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const action = await db.pendingAction.create({
         data: {
           tenantId,
           type: "send_email",
-          payload,
+          payload: payload as any,
           status: "pending",
         },
       })
@@ -222,11 +228,12 @@ async function executeTool(
         subject: toolInput.subject as string,
         body: toolInput.body as string,
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const action = await db.pendingAction.create({
         data: {
           tenantId,
           type: "reply_email",
-          payload,
+          payload: payload as any,
           status: "pending",
         },
       })
@@ -242,7 +249,6 @@ async function executeTool(
       const query = (toolInput.query as string) ?? ""
       const limit = (toolInput.limit as number) ?? 20
 
-      // Buscar en mensajes de WA almacenados en la DB
       const messages = await db.message.findMany({
         where: {
           conversation: { tenantId },
@@ -279,11 +285,12 @@ async function executeTool(
         to: toolInput.to as string,
         message: toolInput.message as string,
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const action = await db.pendingAction.create({
         data: {
           tenantId,
           type: "send_whatsapp_message",
-          payload,
+          payload: payload as any,
           status: "pending",
         },
       })
@@ -314,39 +321,26 @@ async function executeTool(
 }
 
 // =============================================================
-// Función principal de chat
+// Helper: obtener configuración del tenant + validar API key
 // =============================================================
 
-export async function chat(
-  messages: ChatInput[],
-  tenantId: string,
-  conversationId: string | null
-): Promise<ChatResult> {
-  const apiKey = await getConfig("anthropicApiKey")
-  if (!apiKey) throw new Error("Anthropic API key no configurada")
-
-  // Obtener modelo configurado del tenant
+async function getTenantSetup(tenantId: string) {
   const tenant = await db.tenant.findUnique({
     where: { id: tenantId },
     select: { config: true },
   })
-  const tenantConfig = tenant?.config as Record<string, string> | null
-  const model = tenantConfig?.model ?? DEFAULT_MODEL
+  const tenantConfig = (tenant?.config ?? {}) as Record<string, string>
+  const rawApiKey = tenantConfig.anthropicApiKey
+  if (!rawApiKey) throw new Error("Anthropic API key no configurada")
+  const apiKey = decrypt(rawApiKey)
+  const model = tenantConfig.model ?? DEFAULT_MODEL
+  const assistantName = tenantConfig.assistantName ?? "KITT"
+  const tone = tenantConfig.tone ?? "professional"
+  return { apiKey, model, assistantName, tone, tenantConfig }
+}
 
-  // Obtener o crear conversación
-  let convId = conversationId
-  if (!convId) {
-    const conv = await db.conversation.create({ data: { tenantId } })
-    convId = conv.id
-  }
-
-  const client = new Anthropic({ apiKey })
-
-  // Contexto del sistema
-  const assistantName = tenantConfig?.assistantName ?? "KITT"
-  const tone = tenantConfig?.tone ?? "professional"
-
-  const systemPrompt = `Sos ${assistantName}, el asistente empresarial de IA del usuario. Tu trabajo es ayudarlo a gestionar sus comunicaciones: emails y mensajes de WhatsApp.
+function buildSystemPrompt(assistantName: string, tone: string): string {
+  return `Sos ${assistantName}, el asistente empresarial de IA del usuario. Tu trabajo es ayudarlo a gestionar sus comunicaciones: emails y mensajes de WhatsApp.
 
 Tono: ${tone === "professional" ? "profesional y conciso" : "amigable y cercano"}.
 
@@ -357,8 +351,129 @@ Reglas fundamentales:
 - Si el usuario pide crear un documento, reporte o contenido visual, usá create_artifact.
 - Respondé siempre en español.
 - Sé directo y útil. No repitas información innecesaria.`
+}
 
-  // Agentic loop — máximo 10 iteraciones
+// =============================================================
+// chatStream — streaming SSE (función principal)
+// =============================================================
+
+export async function chatStream(
+  messages: ChatInput[],
+  tenantId: string,
+  conversationId: string | null,
+  onChunk: (chunk: StreamChunk) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const { apiKey, model, assistantName, tone } = await getTenantSetup(tenantId)
+
+  let convId = conversationId
+  if (!convId) {
+    const conv = await db.conversation.create({ data: { tenantId } })
+    convId = conv.id
+  }
+
+  const client = new Anthropic({ apiKey })
+  const systemPrompt = buildSystemPrompt(assistantName, tone)
+
+  let currentMessages: Anthropic.MessageParam[] = messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }))
+
+  const MAX_ITERATIONS = 10
+  let iteration = 0
+
+  while (iteration < MAX_ITERATIONS) {
+    iteration++
+
+    if (signal?.aborted) break
+
+    const stream = client.messages.stream({
+      model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools: TOOLS,
+      messages: currentMessages,
+    })
+
+    // Emitir deltas de texto en tiempo real
+    stream.on("text", (text) => {
+      if (!signal?.aborted) {
+        onChunk({ type: "text", text })
+      }
+    })
+
+    const response = await stream.finalMessage()
+
+    if (signal?.aborted) break
+
+    if (response.stop_reason === "end_turn") {
+      break
+    }
+
+    if (response.stop_reason === "tool_use") {
+      currentMessages.push({ role: "assistant", content: response.content })
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+      for (const block of response.content) {
+        if (block.type !== "tool_use") continue
+
+        const result = await executeTool(
+          block.name,
+          block.input as Record<string, unknown>,
+          tenantId
+        )
+
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: result.toolResult,
+        })
+
+        if (result.pendingActionId) {
+          onChunk({
+            type: "pending_action",
+            pendingActionId: result.pendingActionId,
+            actionType: result.actionType!,
+            actionPayload: result.actionPayload!,
+          })
+        }
+        if (result.artifact) {
+          onChunk({ type: "artifact", artifact: result.artifact })
+        }
+      }
+
+      currentMessages.push({ role: "user", content: toolResults })
+      continue
+    }
+
+    break
+  }
+
+  onChunk({ type: "done", conversationId: convId })
+}
+
+// =============================================================
+// chat — versión no-streaming (fallback / uso interno)
+// =============================================================
+
+export async function chat(
+  messages: ChatInput[],
+  tenantId: string,
+  conversationId: string | null
+): Promise<ChatResult> {
+  const { apiKey, model, assistantName, tone } = await getTenantSetup(tenantId)
+
+  let convId = conversationId
+  if (!convId) {
+    const conv = await db.conversation.create({ data: { tenantId } })
+    convId = conv.id
+  }
+
+  const client = new Anthropic({ apiKey })
+  const systemPrompt = buildSystemPrompt(assistantName, tone)
+
   const MAX_ITERATIONS = 10
   let iteration = 0
 
@@ -384,22 +499,15 @@ Reglas fundamentales:
       messages: currentMessages,
     })
 
-    // Si la respuesta es final (sin tool calls)
     if (response.stop_reason === "end_turn") {
       const textBlock = response.content.find((b) => b.type === "text")
       finalMessage = textBlock?.type === "text" ? textBlock.text : ""
       break
     }
 
-    // Si hay tool calls
     if (response.stop_reason === "tool_use") {
-      // Agregar respuesta del asistente al historial
-      currentMessages.push({
-        role: "assistant",
-        content: response.content,
-      })
+      currentMessages.push({ role: "assistant", content: response.content })
 
-      // Ejecutar cada tool call
       const toolResults: Anthropic.ToolResultBlockParam[] = []
 
       for (const block of response.content) {
@@ -417,7 +525,6 @@ Reglas fundamentales:
           content: result.toolResult,
         })
 
-        // Guardar datos de la primera acción pendiente / artefacto encontrado
         if (result.pendingActionId && !pendingActionId) {
           pendingActionId = result.pendingActionId
           actionType = result.actionType
@@ -428,16 +535,10 @@ Reglas fundamentales:
         }
       }
 
-      // Agregar resultados al historial
-      currentMessages.push({
-        role: "user",
-        content: toolResults,
-      })
-
+      currentMessages.push({ role: "user", content: toolResults })
       continue
     }
 
-    // Fallback — tomar el primer bloque de texto disponible
     const textBlock = response.content.find((b) => b.type === "text")
     finalMessage = textBlock?.type === "text" ? textBlock.text : ""
     break

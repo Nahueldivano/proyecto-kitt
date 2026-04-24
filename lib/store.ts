@@ -27,6 +27,7 @@ interface ChatStore {
 
   addMessage: (msg: ChatMessage) => void
   updateLastMessage: (content: string) => void
+  patchLastMessage: (patch: Partial<ChatMessage>) => void
   setArtifact: (artifact: Artifact | null) => void
   setConversationId: (id: string) => void
   setLoading: (loading: boolean) => void
@@ -49,6 +50,18 @@ export const useChatStore = create<ChatStore>((set) => ({
         messages[messages.length - 1] = {
           ...messages[messages.length - 1],
           content,
+        }
+      }
+      return { messages }
+    }),
+
+  patchLastMessage: (patch) =>
+    set((state) => {
+      const messages = [...state.messages]
+      if (messages.length > 0) {
+        messages[messages.length - 1] = {
+          ...messages[messages.length - 1],
+          ...patch,
         }
       }
       return { messages }

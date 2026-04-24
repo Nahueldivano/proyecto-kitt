@@ -6,13 +6,17 @@ import { VoiceButton } from "./VoiceButton"
 
 interface ChatInputProps {
   onSend: (message: string) => void
+  onCancel?: () => void
   disabled?: boolean
+  isStreaming?: boolean
   placeholder?: string
 }
 
 export function ChatInput({
   onSend,
+  onCancel,
   disabled = false,
+  isStreaming = false,
   placeholder = "Escribí un mensaje a KITT...",
 }: ChatInputProps) {
   const [value, setValue] = useState("")
@@ -66,33 +70,56 @@ export function ChatInput({
           <VoiceButton onTranscript={handleVoiceTranscript} disabled={disabled} />
         </div>
 
-        {/* Send button — más grande en mobile */}
-        <Button
-          onClick={handleSend}
-          disabled={disabled || !value.trim()}
-          size="icon"
-          className="h-10 w-10 md:h-9 md:w-9 flex-shrink-0 rounded-xl"
-          aria-label="Enviar"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {/* Botón cancelar (durante streaming) o enviar */}
+        {isStreaming ? (
+          <Button
+            type="button"
+            onClick={onCancel}
+            size="icon"
+            variant="outline"
+            className="h-10 w-10 md:h-9 md:w-9 flex-shrink-0 rounded-xl border-red-500/40 text-red-500 hover:bg-red-500/10"
+            aria-label="Cancelar"
           >
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </Button>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            onClick={handleSend}
+            disabled={disabled || !value.trim()}
+            size="icon"
+            className="h-10 w-10 md:h-9 md:w-9 flex-shrink-0 rounded-xl"
+            aria-label="Enviar"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </Button>
+        )}
       </div>
 
-      {/* Hint "Enter para enviar" — solo desktop */}
+      {/* Hint */}
       <p className="hidden md:block text-center text-[10px] text-[hsl(var(--text-3))] mt-2">
-        Enter para enviar · Shift+Enter para nueva línea
+        {isStreaming
+          ? "KITT está respondiendo... · Hacé clic en el botón rojo para cancelar"
+          : "Enter para enviar · Shift+Enter para nueva línea"}
       </p>
     </div>
   )

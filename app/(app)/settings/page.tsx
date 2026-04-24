@@ -1,17 +1,26 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, KeyboardEvent } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { AVAILABLE_MODELS } from "@/lib/models"
+import type { TrackedEntity } from "@/lib/memory"
 
 interface TenantConfig {
   assistantName?: string
   tone?: string
   model?: string
+}
+
+interface MemoryStats {
+  usagePercent: number
+  factsCount: number
+  maxFacts: number
+  trackedEntities: TrackedEntity[]
+  updatedAt: string
 }
 
 export default function SettingsPage() {
@@ -30,29 +39,40 @@ export default function SettingsPage() {
   const [gmailEmail, setGmailEmail] = useState<string | null>(null)
   const [disconnectingGmail, setDisconnectingGmail] = useState(false)
 
+  // Memory state
+  const [memory, setMemory] = useState<MemoryStats | null>(null)
+  const [clearingMemory, setClearingMemory] = useState(false)
+
+  // Monitor state
+  const [monitorInput, setMonitorInput] = useState("")
+  const [monitorLoading, setMonitorLoading] = useState(false)
+  const [monitorFeedback, setMonitorFeedback] = useState<string | null>(null)
+
   const gmailConnected = searchParams.get("gmail") === "connected"
 
   useEffect(() => {
-    // Cargar config
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d) => setConfig(d.config ?? {}))
       .catch(() => {})
 
-    // Cargar estado WA
     fetch("/api/whatsapp/status")
       .then((r) => r.json())
       .then((d) => setWaStatus(d.status))
       .catch(() => {})
 
-    // Cargar Gmail
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then(() => {
-        // El email de Gmail viene del tenant en el futuro
-        // Por ahora usamos el endpoint de status
-      })
+    loadMemory()
   }, [])
+
+  async function loadMemory() {
+    try {
+      const res = await fetch("/api/memory")
+      if (res.ok) {
+        const data = await res.json()
+        setMemory(data)
+      }
+    } catch {}
+  }
 
   async function saveConfig() {
     setSaving(true)
@@ -103,8 +123,65 @@ export default function SettingsPage() {
     }
   }
 
-  const waStatusColor = waStatus === "connected" ? "success" : waStatus === "connecting" ? "warning" : "default"
-  const waStatusLabel = waStatus === "connected" ? "Conectado" : waStatus === "connecting" ? "Conectando..." : "Desconectado"
+  async function handleClearMemory() {
+    if (!confirm("¿Borrar toda la memoria de KITT? Esta acción no se puede deshacer.")) return
+    setClearingMemory(true)
+    try {
+      await fetch("/api/memory", { method: "DELETE" })
+      await loadMemory()
+    } finally {
+      setClearingMemory(false)
+    }
+  }
+
+  async function handleMonitorSubmit() {
+    const text = monitorInput.trim()
+    if (!text || monitorLoading) return
+
+    setMonitorLoading(true)
+    setMonitorFeedback(null)
+    try {
+      const res = await fetch("/api/settings/monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setMonitorInput("")
+        setMonitorFeedback(`✓ ${data.added} entidad${data.added !== 1 ? "es" : ""} agregada${data.added !== 1 ? "s" : ""}`)
+        await loadMemory()
+        setTimeout(() => setMonitorFeedback(null), 3000)
+      } else {
+        setMonitorFeedback(`✗ ${data.error ?? "Error al procesar"}`)
+      }
+    } finally {
+      setMonitorLoading(false)
+    }
+  }
+
+  async function handleRemoveEntity(identifier: string) {
+    try {
+      await fetch("/api/settings/monitor", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier }),
+      })
+      await loadMemory()
+    } catch {}
+  }
+
+  function handleMonitorKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleMonitorSubmit()
+    }
+  }
+
+  const waStatusColor =
+    waStatus === "connected" ? "success" : waStatus === "connecting" ? "warning" : "default"
+  const waStatusLabel =
+    waStatus === "connected" ? "Conectado" : waStatus === "connecting" ? "Conectando..." : "Desconectado"
 
   return (
     <div className="h-full overflow-y-auto">
@@ -117,7 +194,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* WhatsApp */}
+        {/* ── WhatsApp ───────────────────────────────────────── */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-[hsl(var(--text))]">WhatsApp</h2>
@@ -129,13 +206,7 @@ export default function SettingsPage() {
               <p className="text-sm text-[hsl(var(--text-2))]">
                 Tu WhatsApp está conectado. KITT está recibiendo mensajes.
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={handleReconnect}
-                loading={reconnecting}
-              >
+              <Button variant="outline" size="sm" className="mt-3" onClick={handleReconnect} loading={reconnecting}>
                 Reconectar
               </Button>
             </div>
@@ -151,9 +222,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="p-4 rounded-[var(--radius)] border border-dashed border-[hsl(var(--border-2))] text-center space-y-2">
-              <p className="text-sm text-[hsl(var(--text-3))]">
-                WhatsApp no conectado
-              </p>
+              <p className="text-sm text-[hsl(var(--text-3))]">WhatsApp no conectado</p>
               <Button variant="outline" onClick={fetchQR} loading={qrLoading}>
                 Conectar WhatsApp
               </Button>
@@ -163,7 +232,7 @@ export default function SettingsPage() {
 
         <hr className="border-[hsl(var(--border))]" />
 
-        {/* Gmail */}
+        {/* ── Gmail ─────────────────────────────────────────── */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-[hsl(var(--text))]">Gmail</h2>
@@ -174,9 +243,7 @@ export default function SettingsPage() {
 
           {gmailEmail || gmailConnected ? (
             <div className="p-4 rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--surface))] flex items-center justify-between">
-              <p className="text-sm text-[hsl(var(--text-2))]">
-                {gmailEmail ?? "Casilla conectada"}
-              </p>
+              <p className="text-sm text-[hsl(var(--text-2))]">{gmailEmail ?? "Casilla conectada"}</p>
               <Button
                 variant="ghost"
                 size="sm"
@@ -207,7 +274,121 @@ export default function SettingsPage() {
 
         <hr className="border-[hsl(var(--border))]" />
 
-        {/* KITT Config */}
+        {/* ── Memoria de KITT ───────────────────────────────── */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-[hsl(var(--text))]">Memoria de KITT</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearMemory}
+              loading={clearingMemory}
+              className="text-red-500 border-red-500/30 hover:bg-red-500/10 text-xs"
+            >
+              Reiniciar memoria
+            </Button>
+          </div>
+
+          {memory ? (
+            <div className="space-y-3">
+              {/* Barra de progreso */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-[hsl(var(--text-3))]">
+                  <span>{memory.factsCount} / {memory.maxFacts} hechos almacenados</span>
+                  <span>{memory.usagePercent}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-[hsl(var(--surface-2))] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      memory.usagePercent >= 80
+                        ? "bg-red-500"
+                        : memory.usagePercent >= 50
+                        ? "bg-amber-500"
+                        : "bg-[hsl(var(--accent))]"
+                    }`}
+                    style={{ width: `${memory.usagePercent}%` }}
+                  />
+                </div>
+                {memory.updatedAt && (
+                  <p className="text-[10px] text-[hsl(var(--text-3))]">
+                    Actualizado: {new Date(memory.updatedAt).toLocaleString("es-AR")}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="h-8 rounded-lg bg-[hsl(var(--surface-2))] animate-pulse" />
+          )}
+        </section>
+
+        <hr className="border-[hsl(var(--border))]" />
+
+        {/* ── Monitoreo en segundo plano ─────────────────────── */}
+        <section className="space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-[hsl(var(--text))]">
+              Monitoreo en segundo plano
+            </h2>
+            <p className="text-xs text-[hsl(var(--text-3))] mt-0.5">
+              KITT aprendrá automáticamente de estas fuentes sin que tengas que decirle nada.
+            </p>
+          </div>
+
+          {/* Entidades actuales */}
+          {memory && memory.trackedEntities.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {memory.trackedEntities.map((entity) => (
+                <span
+                  key={entity.identifier}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border border-[hsl(var(--border-2))] bg-[hsl(var(--surface))] text-[hsl(var(--text-2))]"
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${entity.type === "whatsapp" ? "bg-emerald-500" : "bg-blue-500"}`} />
+                  {entity.description}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveEntity(entity.identifier)}
+                    className="ml-0.5 text-[hsl(var(--text-3))] hover:text-red-500 transition-colors"
+                    aria-label={`Eliminar ${entity.description}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Input de lenguaje natural */}
+          <div className="space-y-2">
+            <Label>¿A quién debería monitorear KITT?</Label>
+            <div className="flex gap-2">
+              <Input
+                value={monitorInput}
+                onChange={(e) => setMonitorInput(e.target.value)}
+                onKeyDown={handleMonitorKeyDown}
+                placeholder='Ej: "Monitoreá el grupo Ventas y los mails de juan@empresa.com"'
+                disabled={monitorLoading}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                onClick={handleMonitorSubmit}
+                disabled={!monitorInput.trim() || monitorLoading}
+                loading={monitorLoading}
+              >
+                Agregar
+              </Button>
+            </div>
+            {monitorFeedback && (
+              <p className={`text-xs ${monitorFeedback.startsWith("✓") ? "text-emerald-500" : "text-red-500"}`}>
+                {monitorFeedback}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <hr className="border-[hsl(var(--border))]" />
+
+        {/* ── Comportamiento de KITT ─────────────────────────── */}
         <section className="space-y-4">
           <h2 className="text-base font-semibold text-[hsl(var(--text))]">
             Comportamiento de KITT
@@ -218,9 +399,7 @@ export default function SettingsPage() {
               <Label>Nombre del asistente</Label>
               <Input
                 value={config.assistantName ?? "KITT"}
-                onChange={(e) =>
-                  setConfig((c) => ({ ...c, assistantName: e.target.value }))
-                }
+                onChange={(e) => setConfig((c) => ({ ...c, assistantName: e.target.value }))}
                 placeholder="KITT"
               />
             </div>
@@ -231,6 +410,7 @@ export default function SettingsPage() {
                 {(["professional", "friendly"] as const).map((t) => (
                   <button
                     key={t}
+                    type="button"
                     onClick={() => setConfig((c) => ({ ...c, tone: t }))}
                     className={`p-3 rounded-[var(--radius)] border text-sm text-left transition-all ${
                       (config.tone ?? "professional") === t
@@ -248,9 +428,7 @@ export default function SettingsPage() {
               <Label>Modelo de IA</Label>
               <select
                 value={config.model ?? "claude-sonnet-4-5-20251001"}
-                onChange={(e) =>
-                  setConfig((c) => ({ ...c, model: e.target.value }))
-                }
+                onChange={(e) => setConfig((c) => ({ ...c, model: e.target.value }))}
                 className="flex h-10 w-full rounded-[var(--radius)] border border-[hsl(var(--border-2))] bg-[hsl(var(--background))] px-3 py-2 text-sm text-[hsl(var(--text))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--accent))]"
               >
                 {AVAILABLE_MODELS.map((m) => (

@@ -1,0 +1,14 @@
+# Complemento para desarrollo local
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+#  O simplemente: docker compose up -d postgres redis (si ya tenés el override)
+
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: kitt
+
+  redis:
+    ports:
+      - "6379:6379"

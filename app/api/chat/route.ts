@@ -1,7 +1,11 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { chat, type ChatInput } from "@/lib/claude"
+import { chatStream, type ChatInput, type StreamChunk } from "@/lib/claude"
+import type { Artifact } from "@/lib/store"
+
+const MAX_MESSAGE_LENGTH = 32_000
+const MAX_ATTACHMENTS = 5
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -10,87 +14,143 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { message, conversationId } = await req.json()
+    const body = await req.json()
+    const { message, conversationId, attachments } = body as {
+      message: unknown
+      conversationId?: string
+      attachments?: unknown[]
+    }
 
     if (!message || typeof message !== "string") {
       return NextResponse.json({ error: "Mensaje inválido" }, { status: 400 })
     }
 
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        { error: "El mensaje excede el límite de 32.000 caracteres" },
+        { status: 400 }
+      )
+    }
+
+    if (Array.isArray(attachments) && attachments.length > MAX_ATTACHMENTS) {
+      return NextResponse.json(
+        { error: `Máximo ${MAX_ATTACHMENTS} archivos adjuntos` },
+        { status: 400 }
+      )
+    }
+
     const tenantId = session.user.tenantId
 
-    // Cargar historial de la conversación si existe
+    // Verificar que la conversación pertenece a este tenant
+    if (conversationId) {
+      const conv = await db.conversation.findUnique({
+        where: { id: conversationId },
+        select: { tenantId: true },
+      })
+      if (!conv) {
+        return NextResponse.json({ error: "Conversación no encontrada" }, { status: 404 })
+      }
+      if (conv.tenantId !== tenantId) {
+        return NextResponse.json({ error: "Acceso denegado" }, { status: 403 })
+      }
+    }
+
+    // Cargar historial
     let history: ChatInput[] = []
     if (conversationId) {
       const existing = await db.message.findMany({
         where: { conversationId },
         orderBy: { createdAt: "asc" },
-        take: 50, // Máximo 50 mensajes de contexto
+        take: 50,
       })
       history = existing.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       }))
     }
-
-    // Agregar mensaje actual
     history.push({ role: "user", content: message })
 
-    // Llamar a Claude
-    const result = await chat(history, tenantId, conversationId ?? null)
+    // Estado acumulado durante el stream
+    let finalMessage = ""
+    let finalConvId = conversationId ?? ""
+    let artifact: Artifact | undefined
+    let pendingActionId: string | undefined
+    let actionType: string | undefined
+    let actionPayload: Record<string, unknown> | undefined
 
-    // Persistir mensajes en DB
-    await db.message.createMany({
-      data: [
-        {
-          conversationId: result.conversationId,
-          role: "user",
-          content: message,
-        },
-        {
-          conversationId: result.conversationId,
-          role: "assistant",
-          content: result.message,
-          type: result.artifact ? "artifact" : "text",
-          metadata: result.pendingActionId
-            ? JSON.parse(JSON.stringify({
-                pendingActionId: result.pendingActionId,
-                actionType: result.actionType ?? null,
-                actionPayload: result.actionPayload ?? null,
-              }))
-            : {},
-        },
-      ],
+    const encoder = new TextEncoder()
+    const send = (chunk: StreamChunk | { type: "error"; message: string }) =>
+      encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`)
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          await chatStream(
+            history,
+            tenantId,
+            conversationId ?? null,
+            (chunk) => {
+              if (chunk.type === "text") {
+                finalMessage += chunk.text
+              } else if (chunk.type === "artifact") {
+                artifact = chunk.artifact
+              } else if (chunk.type === "pending_action") {
+                pendingActionId = chunk.pendingActionId
+                actionType = chunk.actionType
+                actionPayload = chunk.actionPayload
+              } else if (chunk.type === "done") {
+                finalConvId = chunk.conversationId
+                // Persistir mensajes en background (no bloqueante)
+                db.message
+                  .createMany({
+                    data: [
+                      {
+                        conversationId: chunk.conversationId,
+                        role: "user",
+                        content: message,
+                      },
+                      {
+                        conversationId: chunk.conversationId,
+                        role: "assistant",
+                        content: finalMessage || "Procesé tu solicitud.",
+                        type: artifact ? "artifact" : "text",
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        metadata: (pendingActionId
+                          ? { pendingActionId, actionType: actionType ?? null, actionPayload: actionPayload ?? null }
+                          : {}) as any,
+                      },
+                    ],
+                  })
+                  .catch((err) => console.error("[chat] DB persist error:", err))
+              }
+              controller.enqueue(send(chunk))
+            }
+          )
+          controller.close()
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Error desconocido"
+          console.error("[chat] stream error:", err)
+
+          let clientMsg = "Error interno del servidor"
+          if (errMsg.includes("API key")) clientMsg = "La API key de Anthropic no está configurada"
+          else if (errMsg.includes("Gmail")) clientMsg = "Gmail no está conectado. Configuralo en Ajustes."
+
+          controller.enqueue(send({ type: "error", message: clientMsg }))
+          controller.close()
+        }
+      },
     })
 
-    return NextResponse.json({
-      message: result.message,
-      artifact: result.artifact,
-      pendingActionId: result.pendingActionId,
-      actionType: result.actionType,
-      actionPayload: result.actionPayload,
-      conversationId: result.conversationId,
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
     })
   } catch (error) {
     console.error("[chat] error:", error)
-
-    // Mensaje amigable según el tipo de error
-    const errMsg =
-      error instanceof Error ? error.message : "Error desconocido"
-
-    if (errMsg.includes("API key")) {
-      return NextResponse.json(
-        { error: "La API key de Anthropic no está configurada" },
-        { status: 503 }
-      )
-    }
-
-    if (errMsg.includes("Gmail no está conectado")) {
-      return NextResponse.json(
-        { error: "Gmail no está conectado. Configuralo en Ajustes." },
-        { status: 503 }
-      )
-    }
-
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

@@ -1,0 +1,89 @@
+services:
+
+  # ── KITT App ──────────────────────────────────────────────────
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY}
+      KITT_INTERNAL_KEY: ${KITT_INTERNAL_KEY}
+      KITT_ADMIN_EMAIL: ${KITT_ADMIN_EMAIL}
+      REDIS_URL: ${REDIS_URL}
+      N8N_WEBHOOK_URL: ${N8N_WEBHOOK_URL:-""}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kitt-net
+
+  # ── PostgreSQL ────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kitt
+      POSTGRES_USER: kitt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kitt -d kitt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kitt-net
+
+  # ── Redis ─────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - kitt-net
+
+  # ── Evolution API (WhatsApp) ──────────────────────────────────
+  # Descomentá este bloque si querés WhatsApp en el mismo VPS
+  # evolution:
+  #   image: atendai/evolution-api:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     SERVER_URL: https://evolution.tudominio.com
+  #     AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+  #     DATABASE_ENABLED: "true"
+  #     DATABASE_CONNECTION_URI: postgresql://kitt:${POSTGRES_PASSWORD}@postgres:5432/evolution
+  #     REDIS_ENABLED: "true"
+  #     REDIS_URI: redis://redis:6379
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - kitt-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  kitt-net:
+    driver: bridge

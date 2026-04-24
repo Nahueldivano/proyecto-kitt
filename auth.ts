@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
+import { encrypt } from "@/lib/crypto"
 
 // Extensión de tipos para el JWT y Session
 declare module "next-auth" {
@@ -107,14 +108,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               where: { tenantId: dbUser.tenantId },
               update: {
                 email: user.email,
-                accessToken: account.access_token,
-                refreshToken: account.refresh_token,
+                accessToken: encrypt(account.access_token),
+                refreshToken: encrypt(account.refresh_token),
               },
               create: {
                 tenantId: dbUser.tenantId,
                 email: user.email,
-                accessToken: account.access_token,
-                refreshToken: account.refresh_token,
+                accessToken: encrypt(account.access_token),
+                refreshToken: encrypt(account.refresh_token),
               },
             })
           }

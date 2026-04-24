@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { encrypt } from "@/lib/crypto"
 
 export async function GET() {
   const session = await auth()
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
       "reportSchedule",
       "notifyViaWhatsapp",
       "notifyViaEmail",
+      "anthropicApiKey",
+      "trackedEntities",
     ]
 
     const current = await db.tenant.findUnique({
@@ -52,6 +55,11 @@ export async function POST(req: NextRequest) {
       if (field in body) {
         updates[field] = body[field]
       }
+    }
+
+    // Encriptar API key de Anthropic antes de guardar
+    if (updates.anthropicApiKey && typeof updates.anthropicApiKey === "string") {
+      updates.anthropicApiKey = encrypt(updates.anthropicApiKey)
     }
 
     const newConfig = { ...currentConfig, ...updates }
