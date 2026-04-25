@@ -380,8 +380,7 @@ export async function chatStream(
 
   let convId = conversationId
   if (!convId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conv = await db.conversation.create({ data: { tenantId, model } as any })
+    const conv = await db.conversation.create({ data: { tenantId } })
     convId = conv.id
   }
 
@@ -394,8 +393,9 @@ export async function chatStream(
   }))
 
   // Combinar tools personalizadas + web search nativo si está activado
-  const activeTools: Anthropic.Tool[] = options?.webSearch
-    ? ([{ type: "web_search_20250305" }, ...TOOLS] as unknown as Anthropic.Tool[])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeTools: any[] = options?.webSearch
+    ? [{ type: "web_search_20250305", name: "web_search" }, ...TOOLS]
     : TOOLS
 
   const MAX_ITERATIONS = 10
@@ -406,11 +406,12 @@ export async function chatStream(
 
     if (signal?.aborted) break
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stream = client.messages.stream({
       model,
       max_tokens: 4096,
       system: systemPrompt,
-      tools: activeTools,
+      tools: activeTools as any,
       messages: currentMessages,
     })
 

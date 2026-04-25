@@ -112,10 +112,12 @@ export async function POST(req: NextRequest) {
           controller.close()
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : "Error desconocido"
-          console.error("[chat] error:", err)
+          console.error("[chat] stream error:", errMsg, err)
           let clientMsg = "Error interno del servidor"
-          if (errMsg.includes("API key")) clientMsg = "La API key de Anthropic no está configurada"
+          if (errMsg.includes("API key") || errMsg.includes("api_key") || errMsg.includes("Anthropic")) clientMsg = "La API key de Anthropic no está configurada o es inválida"
           else if (errMsg.includes("Gmail")) clientMsg = "Gmail no está conectado."
+          else if (errMsg.includes("model")) clientMsg = `Modelo inválido: ${errMsg}`
+          else if (process.env.NODE_ENV === "development") clientMsg = errMsg
           controller.enqueue(send({ type: "error", message: clientMsg }))
           controller.close()
         }

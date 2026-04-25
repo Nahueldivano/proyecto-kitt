@@ -7,32 +7,58 @@ export async function GET() {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conversations = await (db.conversation as any).findMany({
-    where: { tenantId: session.user.tenantId },
-    orderBy: { createdAt: "desc" },
-    take: 150,
-    select: {
-      id: true,
-      title: true,
-      folderId: true,
-      createdAt: true,
-      messages: {
-        where: { role: "user" },
-        orderBy: { createdAt: "asc" },
-        take: 1,
-        select: { content: true },
-      },
-    },
-  })
-
-  return Response.json({
+  try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    conversations: conversations.map((c: any) => ({
-      id: c.id,
-      title: c.title ?? (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
-      folderId: c.folderId ?? null,
-      createdAt: c.createdAt.toISOString(),
-    })),
-  })
+    const conversations = await (db.conversation as any).findMany({
+      where: { tenantId: session.user.tenantId },
+      orderBy: { createdAt: "desc" },
+      take: 150,
+      select: {
+        id: true,
+        title: true,
+        folderId: true,
+        createdAt: true,
+        messages: {
+          where: { role: "user" },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { content: true },
+        },
+      },
+    })
+
+    return Response.json({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      conversations: conversations.map((c: any) => ({
+        id: c.id,
+        title: c.title ?? (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
+        folderId: c.folderId ?? null,
+        createdAt: c.createdAt.toISOString(),
+      })),
+    })
+  } catch {
+    // Fallback si las columnas nuevas (title, folderId) no existen en la DB todavía
+    const conversations = await db.conversation.findMany({
+      where: { tenantId: session.user.tenantId },
+      orderBy: { createdAt: "desc" },
+      take: 150,
+      include: {
+        messages: {
+          where: { role: "user" },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { content: true },
+        },
+      },
+    })
+
+    return Response.json({
+      conversations: conversations.map((c) => ({
+        id: c.id,
+        title: (c.messages[0]?.content ?? "Conversación").replace(/\n/g, " ").slice(0, 55),
+        folderId: null,
+        createdAt: c.createdAt.toISOString(),
+      })),
+    })
+  }
 }
