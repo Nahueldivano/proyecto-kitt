@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef, useCallback } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
@@ -173,11 +174,8 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
   if (collapsed) {
     return (
       <aside className="hidden md:flex flex-col w-14 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] h-full items-center py-4 gap-4">
-        <button
-          onClick={() => setCollapsed(false)}
-          className="h-8 w-8 rounded-lg bg-[hsl(var(--accent))] flex items-center justify-center"
-        >
-          <span className="text-white font-bold text-sm">K</span>
+        <button onClick={() => setCollapsed(false)} className="flex items-center justify-center">
+          <Image src="/kitt-logo.png" alt="KITT" width={32} height={26} className="object-contain" />
         </button>
         <button onClick={newConversation} className="text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]" title="Nueva conversación">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -195,11 +193,8 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-[hsl(var(--border))]">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-[hsl(var(--accent))] flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-xs">K</span>
-            </div>
-            <span className="font-semibold text-[hsl(var(--text))] text-sm">KITT</span>
-            <div className="flex items-center gap-1.5 ml-1">
+            <Image src="/kitt-logo.png" alt="KITT" width={56} height={45} className="object-contain" />
+            <div className="flex items-center gap-1.5">
               <StatusBadge connected={waConnected} showLabel={false} />
               <StatusBadge connected={gmailConnected} showLabel={false} />
             </div>

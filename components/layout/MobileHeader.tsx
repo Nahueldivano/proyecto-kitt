@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useSession } from "next-auth/react"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
 import { StatusBadge } from "./StatusBadge"
@@ -19,16 +20,10 @@ export function MobileHeader({
     <header className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--surface))]">
       {/* Logo */}
       <div className="flex items-center gap-2">
-        <div className="h-8 w-8 rounded-lg bg-[hsl(var(--accent))] flex items-center justify-center">
-          <span className="text-white font-bold text-sm">K</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-[hsl(var(--text))]">KITT</span>
-          {/* Status dots compactos */}
-          <div className="flex items-center gap-1.5">
-            <StatusBadge connected={waConnected} />
-            <StatusBadge connected={gmailConnected} />
-          </div>
+        <Image src="/kitt-logo.png" alt="KITT" width={60} height={48} className="object-contain" />
+        <div className="flex items-center gap-1.5">
+          <StatusBadge connected={waConnected} />
+          <StatusBadge connected={gmailConnected} />
         </div>
       </div>
 

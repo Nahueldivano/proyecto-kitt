@@ -12,6 +12,15 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "KITT — Asistente Empresarial IA",
   description: "Tu asistente empresarial de inteligencia artificial",
+  icons: {
+    icon: "/kitt-logo.png",
+    apple: "/kitt-logo.png",
+  },
+  openGraph: {
+    title: "KITT — Asistente Empresarial IA",
+    description: "Tu asistente empresarial de inteligencia artificial",
+    images: [{ url: "/kitt-logo.png", width: 1904, height: 1536 }],
+  },
 }
 
 export default function RootLayout({

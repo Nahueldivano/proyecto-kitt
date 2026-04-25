@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,11 +48,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-[hsl(var(--accent))] mb-4">
-            <span className="text-white font-bold text-xl">K</span>
+          <div className="flex justify-center mb-3">
+            <Image src="/kitt-logo.png" alt="KITT" width={120} height={97} className="object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-[hsl(var(--text))]">KITT</h1>
-          <p className="text-sm text-[hsl(var(--text-3))] mt-1">
+          <p className="text-sm text-[hsl(var(--text-3))]">
             Tu asistente empresarial de IA
           </p>
         </div>

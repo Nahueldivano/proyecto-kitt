@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Running database migrations..."
-npx prisma@6 migrate deploy
+echo "Applying database schema..."
+npx prisma db push --accept-data-loss
 
 echo "Starting KITT..."
 exec node server.js

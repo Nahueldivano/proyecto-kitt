@@ -330,9 +330,18 @@ async function getTenantSetup(tenantId: string) {
     select: { config: true },
   })
   const tenantConfig = (tenant?.config ?? {}) as Record<string, string>
-  const rawApiKey = tenantConfig.anthropicApiKey
-  if (!rawApiKey) throw new Error("Anthropic API key no configurada")
-  const apiKey = decrypt(rawApiKey)
+
+  // Prioridad: API key por tenant (encriptada en DB) → variable de entorno global
+  let apiKey = process.env.ANTHROPIC_API_KEY ?? ""
+  if (tenantConfig.anthropicApiKey) {
+    try {
+      apiKey = decrypt(tenantConfig.anthropicApiKey)
+    } catch {
+      // Si falla la desencriptación, usar la del env como fallback
+    }
+  }
+  if (!apiKey) throw new Error("Anthropic API key no configurada")
+
   const model = tenantConfig.model ?? DEFAULT_MODEL
   const assistantName = tenantConfig.assistantName ?? "KITT"
   const tone = tenantConfig.tone ?? "professional"
