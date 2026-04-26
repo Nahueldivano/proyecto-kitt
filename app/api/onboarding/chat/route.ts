@@ -83,21 +83,29 @@ export async function POST(req: NextRequest) {
       messages: { role: "user" | "assistant"; content: string }[]
     }
 
-    // API key: primero tenant config, después global
+    // API key: primero tenant config (encriptado), después global, después env
     const tenant = await db.tenant.findUnique({
       where: { id: session.user.tenantId },
       select: { config: true },
     })
     const tenantConfig = (tenant?.config ?? {}) as Record<string, string>
-    const rawKey =
-      tenantConfig.anthropicApiKey || (await getConfig("anthropicApiKey"))
-    if (!rawKey) {
+
+    let apiKey = process.env.ANTHROPIC_API_KEY ?? ""
+    if (tenantConfig.anthropicApiKey) {
+      try { apiKey = decrypt(tenantConfig.anthropicApiKey) } catch { /* usar fallback */ }
+    } else {
+      const cfgKey = await getConfig("anthropicApiKey")
+      if (cfgKey) {
+        try { apiKey = decrypt(cfgKey) } catch { apiKey = cfgKey }
+      }
+    }
+
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "API key de Anthropic no configurada. Pedile al administrador que la configure." },
+        { error: "API key de Anthropic no configurada. Configurala en Ajustes → Perfil." },
         { status: 422 }
       )
     }
-    const apiKey = decrypt(rawKey)
 
     const client = new Anthropic({ apiKey })
 

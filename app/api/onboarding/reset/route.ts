@@ -20,14 +20,18 @@ export async function POST() {
       where: { id: session.user.tenantId },
       select: { config: true },
     })
-    const config = JSON.parse((tenant?.config as string) ?? "{}") as Record<string, unknown>
+    // tenant.config es un objeto JS (Prisma deserializa Json automáticamente)
+    const config = { ...((tenant?.config ?? {}) as Record<string, unknown>) }
     delete config.userContext
     delete config.assistantName
     delete config.tone
+    delete config.businessName
+    delete config.objectives
 
     await db.tenant.update({
       where: { id: session.user.tenantId },
-      data: { config: JSON.stringify(config) },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { config: config as any },
     })
 
     return NextResponse.json({ success: true })

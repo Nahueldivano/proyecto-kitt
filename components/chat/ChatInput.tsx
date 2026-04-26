@@ -29,6 +29,7 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
   const modelRef = useRef<HTMLDivElement>(null)
 
   const {
+    messages,
     selectedModel, setSelectedModel,
     webSearchEnabled, toggleWebSearch,
     attachedFiles, addAttachedFile, removeAttachedFile,
@@ -75,8 +76,8 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
 
   return (
     <div className="border-t border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-3">
-      {/* Chips de acciones rápidas — solo si no hay mensajes */}
-      {!isStreaming && !disabled && (
+      {/* Chips de acciones rápidas — solo cuando no hay mensajes */}
+      {!isStreaming && !disabled && messages.length === 0 && (
         <div className="flex flex-wrap gap-2 mb-3 max-w-3xl mx-auto">
           {QUICK_ACTIONS.map((a) => (
             <button
