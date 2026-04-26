@@ -1,5 +1,19 @@
 services:
 
+  # ── DB Migration (runs prisma db push, exits when done) ───────
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - kitt-net
+    restart: "no"
+
   # ── KITT App ──────────────────────────────────────────────────
   app:
     build: .
@@ -24,6 +38,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks:
       - kitt-net
 

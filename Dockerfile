@@ -17,14 +17,26 @@ RUN apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client for the target platform
+# Generate Prisma client using the locally-installed Prisma 6 CLI
 RUN node ./node_modules/prisma/build/index.js generate
 
 # Build Next.js (standalone output)
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# ─── Stage 3: Production runner ──────────────────────────────────────────────
+# ─── Stage 3: Migrator (runs prisma db push at startup) ──────────────────────
+# Has full node_modules so the prisma CLI and all its deps are available.
+FROM node:22-alpine AS migrator
+WORKDIR /app
+
+RUN apk add --no-cache openssl
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY prisma ./prisma
+
+CMD ["node", "./node_modules/prisma/build/index.js", "db", "push", "--accept-data-loss"]
+
+# ─── Stage 4: Production runner ──────────────────────────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -43,18 +55,12 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Prisma files needed at runtime (schema + engine + CLI)
+# Prisma client needed at runtime (query engine + generated client)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/prisma ./prisma
-
-# Startup script
-COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
 
 USER nextjs
 
 EXPOSE 3000
 
-ENTRYPOINT ["./entrypoint.sh"]
+CMD ["node", "server.js"]
