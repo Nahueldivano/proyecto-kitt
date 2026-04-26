@@ -59,6 +59,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
+# Cache dir con permisos correctos para el usuario nextjs
+RUN mkdir -p /app/.next/cache && chown -R nextjs:nodejs /app/.next
+
 USER nextjs
 
 EXPOSE 3000
