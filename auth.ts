@@ -41,18 +41,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       },
     }),
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          scope:
-            "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose",
-          access_type: "offline",
-          prompt: "consent",
-        },
-      },
-    }),
+    // Google solo se activa si las credenciales están configuradas
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            authorization: {
+              params: {
+                scope:
+                  "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose",
+                access_type: "offline",
+                prompt: "consent",
+              },
+            },
+          }),
+        ]
+      : []),
   ],
 
   callbacks: {
@@ -74,7 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 config: {
                   assistantName: "KITT",
                   tone: "professional",
-                  model: "claude-sonnet-4-6",
+                  model: "claude-opus-4-7",
                 },
               },
             })
