@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
             iter++
 
             const msgStream = client.messages.stream({
-              model: "claude-sonnet-4-6",
+              model: "claude-opus-4-7",
               max_tokens: 1024,
               system: ONBOARDING_SYSTEM,
               tools: [FINALIZE_TOOL],

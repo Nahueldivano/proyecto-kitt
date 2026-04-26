@@ -50,6 +50,8 @@ export async function POST(req: NextRequest) {
       "notifyViaEmail",
       "anthropicApiKey",
       "trackedEntities",
+      "waMonitorPrompt",
+      "gmailMonitorPrompt",
     ]
 
     const current = await db.tenant.findUnique({

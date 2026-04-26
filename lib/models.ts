@@ -3,7 +3,7 @@
 // Este archivo se puede importar en el client (no tiene deps de server)
 // =============================================================
 
-export const DEFAULT_MODEL = "claude-sonnet-4-6"
+export const DEFAULT_MODEL = "claude-opus-4-7"
 
 export interface AIModel {
   id: string

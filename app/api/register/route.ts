@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         config: {
           assistantName: "KITT",
           tone: "professional",
-          model: "claude-sonnet-4-6",
+          model: "claude-opus-4-7",
         },
       },
     })
