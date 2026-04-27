@@ -2,8 +2,17 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Keep Prisma and pg as external modules — they can't be bundled by webpack
-  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg", "pg-pool"],
+  // Node-only packages that webpack must NOT bundle.
+  // pg/pgpass/pg-connection-string use fs/path/stream which break the client/edge bundle.
+  serverExternalPackages: [
+    "@prisma/client",
+    "@prisma/adapter-pg",
+    "pg",
+    "pg-pool",
+    "pg-connection-string",
+    "pgpass",
+    "pg-native",
+  ],
   images: {
     remotePatterns: [
       {
