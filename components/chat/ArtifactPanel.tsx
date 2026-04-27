@@ -26,15 +26,33 @@ export function ArtifactPanel({ artifact, onClose }: ArtifactPanelProps) {
 
   const renderContent = () => {
     switch (artifact.type) {
-      case "html":
+      case "html": {
+        const raw = artifact.content.trim()
+        const isFullDoc = /^<(!doctype|html)\b/i.test(raw)
+        const srcDoc = isFullDoc
+          ? raw
+          : `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${artifact.title.replace(/[<>]/g, "")}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:1rem;}</style>
+</head>
+<body class="bg-white text-slate-900">
+${raw}
+</body>
+</html>`
         return (
           <iframe
-            srcDoc={artifact.content}
-            className="w-full h-full border-0"
-            sandbox="allow-scripts"
+            srcDoc={srcDoc}
+            className="w-full h-full border-0 bg-white"
+            sandbox="allow-scripts allow-forms allow-popups"
             title={artifact.title}
           />
         )
+      }
 
       case "code":
         return (

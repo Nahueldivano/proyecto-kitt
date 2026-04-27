@@ -4,7 +4,13 @@ import { db } from "@/lib/db"
 import { chatStream, type ChatInput, type StreamChunk } from "@/lib/claude"
 import type { Artifact } from "@/lib/store"
 
-const MAX_MESSAGE_LENGTH = 32_000
+// Mensajes muy grandes (documentos pegados) sí permitidos: KITT analiza docs largos.
+// 500K caracteres ≈ 100 páginas de texto. Lo que no entre en context window lo corta Claude.
+const MAX_MESSAGE_LENGTH = 500_000
+
+// Cuántos mensajes previos del chat se mandan como contexto a Claude.
+// Memoria por conversación: independiente entre chats, acotada para no inflar costos.
+const MAX_HISTORY_MESSAGES = 20
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -43,12 +49,16 @@ export async function POST(req: NextRequest) {
     // Cargar historial
     let history: ChatInput[] = []
     if (conversationId) {
-      const existing = await db.message.findMany({
+      // Memoria por chat: traemos los últimos N mensajes (en orden cronológico).
+      // Cada conversación es independiente — no compartimos contexto entre chats.
+      const recent = await db.message.findMany({
         where: { conversationId },
-        orderBy: { createdAt: "asc" },
-        take: 50,
+        orderBy: { createdAt: "desc" },
+        take: MAX_HISTORY_MESSAGES,
       })
-      history = existing.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+      history = recent
+        .reverse()
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
     }
 
     // Construir mensaje del usuario con archivos adjuntos si los hay
@@ -62,7 +72,6 @@ export async function POST(req: NextRequest) {
     history.push({ role: "user", content: userContent })
 
     let finalMessage = ""
-    let finalConvId = conversationId ?? ""
     let artifact: Artifact | undefined
     let pendingActionId: string | undefined
     let actionType: string | undefined
@@ -87,7 +96,6 @@ export async function POST(req: NextRequest) {
                 actionType = chunk.actionType
                 actionPayload = chunk.actionPayload
               } else if (chunk.type === "done") {
-                finalConvId = chunk.conversationId
                 db.message
                   .createMany({
                     data: [
