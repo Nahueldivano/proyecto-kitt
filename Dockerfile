@@ -24,25 +24,7 @@ RUN node ./node_modules/prisma/build/index.js generate
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# ─── Stage 3: Migrator (pure SQL via pg — no Prisma CLI needed) ───────────────
-FROM node:22-alpine AS migrator
-WORKDIR /app
-
-# Only need pg and its direct deps for raw SQL migrations
-COPY --from=deps /app/node_modules/pg ./node_modules/pg
-COPY --from=deps /app/node_modules/pg-cloudflare ./node_modules/pg-cloudflare
-COPY --from=deps /app/node_modules/pg-connection-string ./node_modules/pg-connection-string
-COPY --from=deps /app/node_modules/pg-int8 ./node_modules/pg-int8
-COPY --from=deps /app/node_modules/pg-pool ./node_modules/pg-pool
-COPY --from=deps /app/node_modules/pg-protocol ./node_modules/pg-protocol
-COPY --from=deps /app/node_modules/pg-types ./node_modules/pg-types
-COPY --from=deps /app/node_modules/pgpass ./node_modules/pgpass
-
-COPY scripts/migrate-db.js ./migrate-db.js
-
-CMD ["node", "migrate-db.js"]
-
-# ─── Stage 4: Production runner ──────────────────────────────────────────────
+# ─── Stage 3: Production runner ──────────────────────────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -65,9 +47,6 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# Migration script (pure pg, no Prisma CLI)
-COPY scripts/migrate-db.js ./migrate-db.js
-
 # Cache dir con permisos correctos para el usuario nextjs
 RUN mkdir -p /app/.next/cache && chown -R nextjs:nodejs /app/.next
 
@@ -75,5 +54,6 @@ USER nextjs
 
 EXPOSE 3000
 
-# Run DB migration first, then start Next.js server
-CMD ["sh", "-c", "node /app/migrate-db.js; exec node /app/server.js"]
+# Las migraciones de schema corren automáticamente en instrumentation.ts
+# al arrancar Next.js (vía Prisma $executeRawUnsafe — no hace falta `pg`).
+CMD ["node", "/app/server.js"]
