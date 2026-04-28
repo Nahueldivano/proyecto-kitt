@@ -51,14 +51,28 @@ export async function POST(req: NextRequest) {
     if (conversationId) {
       // Memoria por chat: traemos los últimos N mensajes (en orden cronológico).
       // Cada conversación es independiente — no compartimos contexto entre chats.
+      // Excluimos mensajes que vinieron por el webhook de WhatsApp: van a la misma
+      // conversation pero romperían el chat (Anthropic rechaza user-roles consecutivos).
       const recent = await db.message.findMany({
         where: { conversationId },
         orderBy: { createdAt: "desc" },
-        take: MAX_HISTORY_MESSAGES,
+        take: MAX_HISTORY_MESSAGES * 2,
       })
-      history = recent
+      const filtered = recent.filter((m) => {
+        const meta = m.metadata as { source?: string } | null
+        return meta?.source !== "whatsapp"
+      })
+      history = filtered
+        .slice(0, MAX_HISTORY_MESSAGES)
         .reverse()
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+
+      // Sanity guard: colapsar pares user/assistant consecutivos del mismo rol
+      // (defensa en profundidad ante datos legados).
+      history = history.filter((msg, i, arr) => {
+        if (i === 0) return true
+        return msg.role !== arr[i - 1].role
+      })
     }
 
     // Construir mensaje del usuario con archivos adjuntos si los hay

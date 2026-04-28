@@ -68,6 +68,24 @@ export default function SettingsPage() {
     loadMemory()
   }, [])
 
+  // Polling de estado WhatsApp en tiempo real mientras se está mostrando QR
+  // o el status no es "connected". Se detiene al conectarse.
+  useEffect(() => {
+    if (waStatus === "connected" && !qrCode) return
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch("/api/whatsapp/status")
+        if (!res.ok) return
+        const d = await res.json()
+        if (d.status && d.status !== waStatus) {
+          setWaStatus(d.status)
+          if (d.status === "connected") setQrCode(null)
+        }
+      } catch {}
+    }, 3000)
+    return () => clearInterval(id)
+  }, [waStatus, qrCode])
+
   async function loadMemory() {
     try {
       const res = await fetch("/api/memory")

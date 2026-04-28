@@ -62,6 +62,8 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
+  const [waLive, setWaLive] = useState<boolean>(waConnected)
+  const [gmailLive, setGmailLive] = useState<boolean>(gmailConnected)
   const [collapsed, setCollapsed] = useState(false)
   const [menu, setMenu] = useState<MenuState>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -89,6 +91,32 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
   useEffect(() => {
     loadData()
   }, [loadData, pathname])
+
+  // Polling de estado de conexiones (WhatsApp + Gmail) cada 10s
+  // para reflejar cambios sin necesidad de recargar la página.
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const [waRes, settingsRes] = await Promise.all([
+          fetch("/api/whatsapp/status"),
+          fetch("/api/settings"),
+        ])
+        if (cancelled) return
+        if (waRes.ok) {
+          const d = await waRes.json()
+          setWaLive(d.status === "connected")
+        }
+        if (settingsRes.ok) {
+          const d = await settingsRes.json()
+          setGmailLive(!!d.gmailEmail)
+        }
+      } catch {}
+    }
+    poll()
+    const id = setInterval(poll, 10000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [])
 
   // Cerrar menú al click fuera
   useEffect(() => {
@@ -195,8 +223,8 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
           <div className="flex items-center gap-2">
             <Image src="/kitt-logo.png" alt="KITT" width={56} height={45} className="object-contain" />
             <div className="flex items-center gap-1.5">
-              <StatusBadge connected={waConnected} showLabel={false} />
-              <StatusBadge connected={gmailConnected} showLabel={false} />
+              <StatusBadge connected={waLive} showLabel={false} />
+              <StatusBadge connected={gmailLive} showLabel={false} />
             </div>
           </div>
           <button
@@ -327,6 +355,20 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
 
         {/* Footer */}
         <div className="p-3 border-t border-[hsl(var(--border))] space-y-2">
+          {/* Estado de conexiones */}
+          <div className="space-y-1 pb-1">
+            <ConnectionRow
+              label="WhatsApp"
+              connected={waLive}
+              onClick={() => router.push("/settings?tab=conexiones")}
+            />
+            <ConnectionRow
+              label="Gmail"
+              connected={gmailLive}
+              onClick={() => router.push("/settings?tab=conexiones")}
+            />
+          </div>
+
           <div className="flex items-center justify-between">
             <Link
               href="/settings"
@@ -427,6 +469,40 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
         </div>
       )}
     </>
+  )
+}
+
+function ConnectionRow({
+  label,
+  connected,
+  onClick,
+}: {
+  label: string
+  connected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[hsl(var(--surface-2))] transition-colors group"
+      title={connected ? `${label} conectado` : `${label} desconectado — click para conectar`}
+    >
+      <span className="text-xs text-[hsl(var(--text-2))] group-hover:text-[hsl(var(--text))]">
+        {label}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className={`text-[10px] uppercase tracking-wide ${connected ? "text-[hsl(var(--success))]" : "text-[hsl(var(--text-3))]"}`}>
+          {connected ? "Conectado" : "Apagado"}
+        </span>
+        <span
+          className={`h-2.5 w-2.5 rounded-full ${
+            connected
+              ? "bg-[hsl(var(--success))] shadow-[0_0_6px_hsl(var(--success))]"
+              : "bg-[hsl(var(--text-3))] opacity-50"
+          }`}
+        />
+      </span>
+    </button>
   )
 }
 
