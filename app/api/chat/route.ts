@@ -141,9 +141,21 @@ export async function POST(req: NextRequest) {
           const errMsg = err instanceof Error ? err.message : "Error desconocido"
           const stack = err instanceof Error ? err.stack : undefined
           console.error("[chat] stream error:", errMsg, "\nSTACK:", stack, "\nRAW:", err)
-          // Devolvemos el mensaje real al cliente para diagnóstico — es la propia
-          // sesión del tenant, no se filtra info de otros usuarios.
-          controller.enqueue(send({ type: "error", message: errMsg }))
+          let clientMsg = errMsg
+          if (
+            errMsg.includes("authentication_error") ||
+            errMsg.includes("invalid x-api-key") ||
+            errMsg.includes("API key") ||
+            errMsg.includes("api_key") ||
+            errMsg.includes("401")
+          ) {
+            clientMsg = "La API key de Anthropic es inválida o está vencida. Andá a Configuración → Asistente y actualizala (regenerala en console.anthropic.com si hace falta)."
+          } else if (errMsg.includes("Gmail")) {
+            clientMsg = "Gmail no está conectado."
+          } else if (errMsg.includes("rate_limit") || errMsg.includes("429")) {
+            clientMsg = "Anthropic rate limit alcanzado. Esperá un momento e intentá de nuevo."
+          }
+          controller.enqueue(send({ type: "error", message: clientMsg }))
           controller.close()
         }
       },
