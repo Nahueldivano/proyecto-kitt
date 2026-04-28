@@ -66,13 +66,18 @@ export async function POST(req: NextRequest) {
         .slice(0, MAX_HISTORY_MESSAGES)
         .reverse()
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
+        .filter((m) => typeof m.content === "string" && m.content.trim().length > 0)
 
-      // Sanity guard: colapsar pares user/assistant consecutivos del mismo rol
-      // (defensa en profundidad ante datos legados).
+      // Sanity guards exigidos por Anthropic:
+      // 1. Colapsar pares mismo-rol consecutivos
+      // 2. El primer mensaje debe ser 'user' — descartamos assistants colgados al inicio
       history = history.filter((msg, i, arr) => {
         if (i === 0) return true
         return msg.role !== arr[i - 1].role
       })
+      while (history.length > 0 && history[0].role !== "user") {
+        history.shift()
+      }
     }
 
     // Construir mensaje del usuario con archivos adjuntos si los hay
@@ -134,13 +139,11 @@ export async function POST(req: NextRequest) {
           controller.close()
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : "Error desconocido"
-          console.error("[chat] stream error:", errMsg, err)
-          let clientMsg = "Error interno del servidor"
-          if (errMsg.includes("API key") || errMsg.includes("api_key") || errMsg.includes("Anthropic")) clientMsg = "La API key de Anthropic no está configurada o es inválida"
-          else if (errMsg.includes("Gmail")) clientMsg = "Gmail no está conectado."
-          else if (errMsg.includes("model")) clientMsg = `Modelo inválido: ${errMsg}`
-          else if (process.env.NODE_ENV === "development") clientMsg = errMsg
-          controller.enqueue(send({ type: "error", message: clientMsg }))
+          const stack = err instanceof Error ? err.stack : undefined
+          console.error("[chat] stream error:", errMsg, "\nSTACK:", stack, "\nRAW:", err)
+          // Devolvemos el mensaje real al cliente para diagnóstico — es la propia
+          // sesión del tenant, no se filtra info de otros usuarios.
+          controller.enqueue(send({ type: "error", message: errMsg }))
           controller.close()
         }
       },
