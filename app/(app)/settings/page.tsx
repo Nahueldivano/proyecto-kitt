@@ -223,7 +223,11 @@ export default function SettingsPage() {
               {qrCode && (
                 <div className="flex flex-col items-center gap-2 p-4 bg-white rounded-xl mb-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={`data:image/png;base64,${qrCode}`} alt="QR WhatsApp" className="w-48 h-48" />
+                  <img
+                    src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`}
+                    alt="QR WhatsApp"
+                    className="w-48 h-48"
+                  />
                   <p className="text-xs text-gray-500">Escaneá con WhatsApp</p>
                 </div>
               )}

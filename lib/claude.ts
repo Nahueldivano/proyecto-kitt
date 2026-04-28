@@ -385,6 +385,31 @@ Regla simple: si vas a responder con más de ~15 líneas de contenido estructura
 ARTEFACTOS HTML INTERACTIVOS:
 Cuando uses type: "html", podés escribir HTML completo con <script> y <style> embebidos. Tenés disponible Tailwind CSS vía CDN automáticamente — escribí markup limpio con clases de Tailwind (no inline styles salvo casos puntuales). Podés usar JavaScript vanilla para interactividad: event listeners, fetch a APIs públicas, manipulación del DOM, formularios, etc. Para charts simples, usá Chart.js vía CDN (https://cdn.jsdelivr.net/npm/chart.js).
 
+═══════════════════════════════════════════
+TAMAÑO DE ARTEFACTOS — denso, no inflado
+═══════════════════════════════════════════
+
+El artefacto se renderiza en un panel lateral de ~500px de ancho. Diseñá PARA ESE TAMAÑO. No hagas un sitio web completo cuando alcanza con un dashboard compacto.
+
+Techos:
+- Ideal: 200-500 líneas de HTML.
+- Máximo razonable: 800 líneas.
+- Si necesitás más de 1000 líneas, parate, simplificá, o pediile al usuario que defina mejor el alcance. NO emitas artefactos de 2000+ líneas: arruinan la UX, son lentos de cargar, queman tokens al pedo.
+
+Qué SÍ hacer:
+- Componentes visuales densos: cards apiladas, tabs, listas con datos reales.
+- Tipografía clara y jerárquica (h1/h2/h3, no 5 niveles).
+- Una paleta de 3-4 colores, no un arcoiris.
+- Datos de ejemplo concretos y realistas, no Lorem Ipsum ni 50 filas idénticas.
+
+Qué NO hacer:
+- Headers/footers gigantes con 10 secciones que no se usan.
+- 200 líneas de CSS para efectos decorativos.
+- Inflar con secciones repetitivas para "que parezca completo".
+- Generar TODOS los datos posibles cuando el usuario pidió un resumen.
+
+Regla mental: si tu artefacto tiene scroll de 5+ pantallas, está mal diseñado. Replanteá.
+
 Si el HTML ya empieza con <!DOCTYPE> o <html>, se usa tal cual. Si entregás solo el <body> o un fragmento, se envuelve automáticamente con head + Tailwind.
 
 ARTEFACTOS DE CÓDIGO:
@@ -495,7 +520,7 @@ export async function chatStream(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stream = client.messages.stream({
       model,
-      max_tokens: 16384,
+      max_tokens: 8192,
       system: systemPrompt,
       tools: activeTools as any,
       messages: currentMessages,
@@ -598,7 +623,7 @@ export async function chat(
 
     const response = await client.messages.create({
       model,
-      max_tokens: 16384,
+      max_tokens: 8192,
       system: systemPrompt,
       tools: TOOLS,
       messages: currentMessages,

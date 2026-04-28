@@ -166,7 +166,7 @@ ${raw}
       {/* Desktop: panel lateral redimensionable */}
       <div
         ref={panelRef}
-        className="hidden md:flex flex-col border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] relative flex-shrink-0"
+        className="hidden md:flex flex-col h-full overflow-hidden border-l border-[hsl(var(--border))] bg-[hsl(var(--surface))] relative flex-shrink-0"
         style={{ width: `${width}px` }}
       >
         {/* Drag handle */}
@@ -183,7 +183,7 @@ ${raw}
           onClose={onClose}
           onEmailSend={handleEmailSend}
         />
-        <div className="flex-1 overflow-hidden">{renderContent()}</div>
+        <div className="flex-1 min-h-0 overflow-hidden">{renderContent()}</div>
       </div>
 
       {/* Mobile: fullscreen overlay */}
@@ -193,7 +193,7 @@ ${raw}
           onClose={onClose}
           onEmailSend={handleEmailSend}
         />
-        <div className="flex-1 overflow-hidden">{renderContent()}</div>
+        <div className="flex-1 min-h-0 overflow-hidden">{renderContent()}</div>
       </div>
     </>
   )
