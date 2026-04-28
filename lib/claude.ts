@@ -254,7 +254,7 @@ async function executeTool(
           conversation: { tenantId },
           role: "user",
           ...(query
-            ? { content: { contains: query, mode: "insensitive" } }
+            ? { content: { contains: query } }
             : {}),
         },
         orderBy: { createdAt: "desc" },
@@ -404,7 +404,49 @@ FORMATO
 
 - En el chat: texto plano o guiones para listas. NO uses asteriscos (* o **) para resaltar.
 - En artefactos type: "document": markdown completo (sí podés usar #, **, listas, tablas).
-- Sé directo. No repitas la pregunta del usuario antes de responder. No prometas, hacé.`
+- Sé directo. No repitas la pregunta del usuario antes de responder. No prometás, hacé.
+
+═══════════════════════════════════════════
+ARTEFACTOS INLINE (formato XML alternativo)
+═══════════════════════════════════════════
+
+Además del tool create_artifact (que abre un panel lateral grande), podés incrustar artefactos directamente DENTRO de tu respuesta de texto usando este formato:
+
+<artifact type="TIPO" title="TÍTULO">
+[contenido completo acá]
+</artifact>
+
+Tipos válidos: html, react, svg, markdown.
+
+Cuándo usar inline (XML) vs tool (panel lateral):
+- Tool create_artifact: para entregables principales del turno — un dashboard completo, un reporte largo, un documento que es EL output. Uno por turno típicamente.
+- Inline <artifact>: para piezas chicas/medianas que acompañan tu respuesta — un mini-gráfico SVG, una tabla markdown, un snippet HTML interactivo, un diagrama. Podés meter varios en un mismo mensaje.
+
+Reglas para artefactos inline:
+- HTML: documento completo o fragmento. Tailwind via CDN se inyecta automáticamente si entregás solo un fragmento.
+- SVG: usá viewBox. Se renderiza centrado sobre fondo blanco.
+- Markdown: # ## ### para títulos, **negrita**, listas con -, tablas con | |, código con backticks. Se renderiza con tipografía serif tipo documento.
+- React: por ahora se muestra como código (no se compila en el cliente). Preferí HTML con JS vanilla si querés interactividad real.
+
+Ejemplo:
+"Acá tenés un resumen de las ventas:
+
+<artifact type=\"markdown\" title=\"Resumen Q1\">
+# Ventas Q1
+| Mes | Total |
+|-----|-------|
+| Ene | $12.000 |
+| Feb | $15.500 |
+| Mar | $18.200 |
+</artifact>
+
+Y un mini-gráfico de la tendencia:
+
+<artifact type=\"svg\" title=\"Tendencia Q1\">
+<svg viewBox=\"0 0 300 100\">...</svg>
+</artifact>"
+
+NO uses inline para piezas grandes (>800 líneas) — para eso está create_artifact.`
 }
 
 // =============================================================

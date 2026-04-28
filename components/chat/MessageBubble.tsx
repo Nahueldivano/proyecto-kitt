@@ -1,6 +1,8 @@
 import type { ChatMessage } from "@/lib/store"
 import { ApprovalCard } from "./ApprovalCard"
 import { formatRelativeDate } from "@/lib/utils"
+import { parseResponseWithArtifacts } from "@/lib/artifact-parser"
+import { ArtifactRenderer } from "@/components/artifacts/ArtifactRenderer"
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -24,7 +26,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     )
   }
 
-  // Mensaje de KITT
+  // Mensaje de KITT — parseamos artefactos inline (formato XML <artifact>)
+  const { text, artifacts } = parseResponseWithArtifacts(message.content)
+
   const pendingActionId = message.pendingActionId
   const metadata = message.metadata as { actionType?: string; actionPayload?: Record<string, unknown> } | undefined
 
@@ -36,9 +40,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       </div>
 
       <div className="flex-1 max-w-[80%] md:max-w-[70%]">
-        <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-[hsl(var(--text))]">
-          <p className="whitespace-pre-wrap">{message.content}</p>
-        </div>
+        {text && (
+          <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-[hsl(var(--text))]">
+            <p className="whitespace-pre-wrap">{text}</p>
+          </div>
+        )}
+
+        {/* Artefactos inline (uno o varios por mensaje) */}
+        {artifacts.map((art) => (
+          <ArtifactRenderer key={art.id} artifact={art} />
+        ))}
 
         {/* Tarjeta de aprobación si hay acción pendiente */}
         {pendingActionId && metadata?.actionType && (
