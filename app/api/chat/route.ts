@@ -49,28 +49,19 @@ export async function POST(req: NextRequest) {
     // Cargar historial
     let history: ChatInput[] = []
     if (conversationId) {
-      // Memoria por chat: traemos los últimos N mensajes (en orden cronológico).
-      // Cada conversación es independiente — no compartimos contexto entre chats.
-      // Excluimos mensajes que vinieron por el webhook de WhatsApp: van a la misma
-      // conversation pero romperían el chat (Anthropic rechaza user-roles consecutivos).
+      // Memoria por chat: últimos N mensajes del chat con KITT, en orden cronológico.
+      // Los mensajes de WhatsApp van a su propia tabla (WhatsappMessage) y no se mezclan acá.
       const recent = await db.message.findMany({
         where: { conversationId },
         orderBy: { createdAt: "desc" },
-        take: MAX_HISTORY_MESSAGES * 2,
+        take: MAX_HISTORY_MESSAGES,
       })
-      const filtered = recent.filter((m) => {
-        const meta = m.metadata as { source?: string } | null
-        return meta?.source !== "whatsapp"
-      })
-      history = filtered
-        .slice(0, MAX_HISTORY_MESSAGES)
+      history = recent
         .reverse()
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }))
         .filter((m) => typeof m.content === "string" && m.content.trim().length > 0)
 
-      // Sanity guards exigidos por Anthropic:
-      // 1. Colapsar pares mismo-rol consecutivos
-      // 2. El primer mensaje debe ser 'user' — descartamos assistants colgados al inicio
+      // Anthropic exige que el primer mensaje sea 'user' y que los roles alternen.
       history = history.filter((msg, i, arr) => {
         if (i === 0) return true
         return msg.role !== arr[i - 1].role

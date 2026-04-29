@@ -98,21 +98,42 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "list_whatsapp_messages",
-    description: "Consulta mensajes de WhatsApp almacenados. Busca por contacto, grupo o contenido.",
+    name: "list_whatsapp_chats",
+    description: "Lista los chats de WhatsApp sincronizados: contactos y grupos con su último mensaje y cantidad de mensajes. Usalo primero para saber qué contactos hay disponibles.",
     input_schema: {
       type: "object" as const,
       properties: {
-        query: {
-          type: "string",
-          description: "Texto de búsqueda: nombre de contacto, grupo, o keywords",
-        },
-        limit: {
-          type: "number",
-          description: "Máximo de mensajes a devolver (default 20)",
-        },
+        limit: { type: "number", description: "Máximo de chats a listar (default 30)" },
       },
       required: [],
+    },
+  },
+  {
+    name: "read_whatsapp_chat",
+    description: "Lee los mensajes de un chat de WhatsApp específico (por JID o nombre de contacto). Devuelve la conversación completa en orden cronológico.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        chat_jid: {
+          type: "string",
+          description: "JID del chat (ej: 5491157589161@s.whatsapp.net) o número/nombre si no sabés el JID exacto",
+        },
+        limit: { type: "number", description: "Últimos N mensajes a traer (default 50)" },
+      },
+      required: ["chat_jid"],
+    },
+  },
+  {
+    name: "search_whatsapp_messages",
+    description: "Busca mensajes de WhatsApp por texto o palabra clave en todos los chats sincronizados.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Texto a buscar en los mensajes" },
+        chat_jid: { type: "string", description: "Filtrar por JID de un chat específico (opcional)" },
+        limit: { type: "number", description: "Máximo de resultados (default 20)" },
+      },
+      required: ["query"],
     },
   },
   {
@@ -245,39 +266,132 @@ async function executeTool(
       }
     }
 
-    case "list_whatsapp_messages": {
-      const query = (toolInput.query as string) ?? ""
-      const limit = (toolInput.limit as number) ?? 20
+    case "list_whatsapp_chats": {
+      const limit = (toolInput.limit as number) ?? 30
 
-      const messages = await db.message.findMany({
-        where: {
-          conversation: { tenantId },
-          role: "user",
-          ...(query
-            ? { content: { contains: query } }
-            : {}),
-        },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        include: { conversation: { select: { id: true } } },
-      })
+      // Traer chats agrupados: nombre, JID, cantidad de mensajes, último mensaje
+      const rows = await db.$queryRawUnsafe<Array<{
+        chatJid: string
+        contactName: string | null
+        messageCount: bigint
+        lastBody: string
+        lastTs: Date
+        lastFromMe: boolean
+      }>>(`
+        SELECT
+          "chatJid",
+          MAX("contactName") AS "contactName",
+          COUNT(*) AS "messageCount",
+          (ARRAY_AGG("body" ORDER BY "timestamp" DESC))[1] AS "lastBody",
+          MAX("timestamp") AS "lastTs",
+          (ARRAY_AGG("fromMe" ORDER BY "timestamp" DESC))[1] AS "lastFromMe"
+        FROM "WhatsappMessage"
+        WHERE "tenantId" = $1
+        GROUP BY "chatJid"
+        ORDER BY MAX("timestamp") DESC
+        LIMIT $2
+      `, tenantId, limit)
 
-      if (messages.length === 0) {
+      if (rows.length === 0) {
         return {
-          toolResult: query
-            ? `No se encontraron mensajes de WhatsApp con "${query}".`
-            : "No hay mensajes de WhatsApp almacenados aún.",
+          toolResult: "No hay chats de WhatsApp sincronizados aún. El usuario puede sincronizar desde Configuración → Conexiones → Sincronizar WhatsApp.",
         }
       }
 
+      const formatted = rows.map((r, i) => {
+        const name = r.contactName ?? r.chatJid
+        const dir = r.lastFromMe ? "→" : "←"
+        const ts = r.lastTs.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+        return `${i + 1}. ${name} [${r.chatJid}] — ${Number(r.messageCount)} msgs — ${ts}\n   ${dir} ${String(r.lastBody).substring(0, 80)}`
+      }).join("\n\n")
+
+      return { toolResult: `Chats de WhatsApp sincronizados (${rows.length}):\n\n${formatted}` }
+    }
+
+    case "read_whatsapp_chat": {
+      const chatInput = String(toolInput.chat_jid ?? "")
+      const limit = (toolInput.limit as number) ?? 50
+
+      // Buscar por JID exacto o por nombre/número parcial
+      let chatJid = chatInput
+      if (!chatInput.includes("@")) {
+        // Buscar el JID por nombre o número parcial
+        const found = await db.$queryRawUnsafe<Array<{ chatJid: string; contactName: string | null }>>(`
+          SELECT "chatJid", MAX("contactName") AS "contactName"
+          FROM "WhatsappMessage"
+          WHERE "tenantId" = $1
+            AND ("chatJid" ILIKE $2 OR "contactName" ILIKE $2)
+          GROUP BY "chatJid"
+          LIMIT 1
+        `, tenantId, `%${chatInput}%`)
+        if (found.length > 0) {
+          chatJid = found[0].chatJid
+        }
+      }
+
+      const messages = await db.$queryRawUnsafe<Array<{
+        fromMe: boolean
+        contactName: string | null
+        body: string
+        messageType: string
+        timestamp: Date
+      }>>(`
+        SELECT "fromMe", "contactName", "body", "messageType", "timestamp"
+        FROM "WhatsappMessage"
+        WHERE "tenantId" = $1 AND "chatJid" = $2
+        ORDER BY "timestamp" DESC
+        LIMIT $3
+      `, tenantId, chatJid, limit)
+
+      if (messages.length === 0) {
+        return { toolResult: `No se encontraron mensajes para "${chatInput}". Usá list_whatsapp_chats para ver los JIDs disponibles.` }
+      }
+
+      const name = messages.find(m => m.contactName)?.contactName ?? chatJid
       const formatted = messages
-        .map(
-          (m) =>
-            `[${m.createdAt.toLocaleString("es-AR")}] ${m.content.substring(0, 200)}`
-        )
+        .reverse()
+        .map((m) => {
+          const dir = m.fromMe ? "Yo" : name
+          const ts = m.timestamp.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+          return `[${ts}] ${dir}: ${m.body}`
+        })
         .join("\n")
 
-      return { toolResult: `Mensajes de WhatsApp:\n\n${formatted}` }
+      return { toolResult: `Conversación con ${name} (${messages.length} mensajes):\n\n${formatted}` }
+    }
+
+    case "search_whatsapp_messages": {
+      const query = String(toolInput.query ?? "")
+      const chatJidFilter = toolInput.chat_jid as string | undefined
+      const limit = (toolInput.limit as number) ?? 20
+
+      const messages = await db.$queryRawUnsafe<Array<{
+        chatJid: string
+        contactName: string | null
+        fromMe: boolean
+        body: string
+        timestamp: Date
+      }>>(`
+        SELECT "chatJid", "contactName", "fromMe", "body", "timestamp"
+        FROM "WhatsappMessage"
+        WHERE "tenantId" = $1
+          AND "body" ILIKE $2
+          AND ($4::text IS NULL OR "chatJid" = $4::text)
+        ORDER BY "timestamp" DESC
+        LIMIT $3
+      `, tenantId, `%${query}%`, limit, chatJidFilter ?? null)
+
+      if (messages.length === 0) {
+        return { toolResult: `No se encontraron mensajes que contengan "${query}".` }
+      }
+
+      const formatted = messages.map((m) => {
+        const name = m.fromMe ? "Yo" : (m.contactName ?? m.chatJid)
+        const ts = m.timestamp.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+        return `[${ts}] ${name}: ${m.body.substring(0, 150)}`
+      }).join("\n")
+
+      return { toolResult: `Mensajes con "${query}" (${messages.length} resultados):\n\n${formatted}` }
     }
 
     case "send_whatsapp_message": {

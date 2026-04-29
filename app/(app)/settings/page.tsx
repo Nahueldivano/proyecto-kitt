@@ -46,6 +46,12 @@ export default function SettingsPage() {
   const [apiKeyInput, setApiKeyInput] = useState("")
   const [waPrompt, setWaPrompt] = useState("")
   const [gmailPrompt, setGmailPrompt] = useState("")
+  const [waHistoryDays, setWaHistoryDays] = useState<number>(30)
+  const [waChats, setWaChats] = useState<{ jid: string; name: string | null }[]>([])
+  const [waWhitelist, setWaWhitelist] = useState<string[]>([])
+  const [loadingChats, setLoadingChats] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<string | null>(null)
 
   const gmailConnected = searchParams.get("gmail") === "connected" || !!gmailEmail
 
@@ -57,6 +63,8 @@ export default function SettingsPage() {
         if (d.gmailEmail) setGmailEmail(d.gmailEmail)
         setWaPrompt(d.config?.waMonitorPrompt ?? "")
         setGmailPrompt(d.config?.gmailMonitorPrompt ?? "")
+        setWaHistoryDays(Number(d.config?.waHistoryDays ?? 30))
+        setWaWhitelist(Array.isArray(d.config?.waContactWhitelist) ? d.config.waContactWhitelist : [])
       })
       .catch(() => {})
 
@@ -147,7 +155,43 @@ export default function SettingsPage() {
   }
 
   async function saveMonitorPrompts() {
-    await saveConfig({ waMonitorPrompt: waPrompt, gmailMonitorPrompt: gmailPrompt })
+    await saveConfig({
+      waMonitorPrompt: waPrompt,
+      gmailMonitorPrompt: gmailPrompt,
+      waHistoryDays,
+      waContactWhitelist: waWhitelist,
+    })
+  }
+
+  async function loadWaChats() {
+    setLoadingChats(true)
+    try {
+      const res = await fetch("/api/whatsapp/sync")
+      if (res.ok) {
+        const d = await res.json()
+        setWaChats(d.chats ?? [])
+      }
+    } catch {} finally { setLoadingChats(false) }
+  }
+
+  function toggleWhitelist(jid: string) {
+    setWaWhitelist((prev) =>
+      prev.includes(jid) ? prev.filter((j) => j !== jid) : [...prev, jid]
+    )
+  }
+
+  async function handleSync() {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch("/api/whatsapp/sync", { method: "POST" })
+      const d = await res.json()
+      if (d.ok) {
+        setSyncResult(`Sincronizado: ${d.messagesSaved} mensajes de ${d.chatsProcessed} chats (últimos ${waHistoryDays} días)`)
+      } else {
+        setSyncResult(`Error: ${d.error ?? "desconocido"}`)
+      }
+    } catch { setSyncResult("Error al sincronizar") } finally { setSyncing(false) }
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -226,6 +270,7 @@ export default function SettingsPage() {
           <div className="space-y-6">
             {/* WhatsApp */}
             <Section title="WhatsApp">
+              {/* Estado + conexión */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className={`h-2 w-2 rounded-full ${waStatus === "connected" ? "bg-green-500" : waStatus === "connecting" ? "bg-yellow-500" : "bg-[hsl(var(--text-3))]"}`} />
@@ -250,17 +295,115 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <Label>Qué contactos y grupos monitorear</Label>
-                <textarea
-                  rows={3}
-                  value={waPrompt}
-                  onChange={(e) => setWaPrompt(e.target.value)}
-                  placeholder='Ej: "Monitoreá el grupo Proveedores y los mensajes de Juan Perez (011-xxxx)"'
-                  className="w-full text-sm resize-none bg-[hsl(var(--background))] border border-[hsl(var(--border-2))] rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[hsl(var(--accent))] text-[hsl(var(--text))] placeholder:text-[hsl(var(--text-3))]"
-                />
-                <p className="text-xs text-[hsl(var(--text-3))]">KITT usará este criterio para filtrar mensajes relevantes</p>
+              {/* Ventana de tiempo */}
+              <div className="space-y-1.5 mb-4">
+                <Label>Ventana de historial a sincronizar</Label>
+                <div className="flex gap-2">
+                  {[15, 30, 60].map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setWaHistoryDays(d)}
+                      className={`flex-1 py-1.5 rounded-lg border text-sm transition-colors ${
+                        waHistoryDays === d
+                          ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
+                          : "border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:border-[hsl(var(--accent))]"
+                      }`}
+                    >
+                      {d} días
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[hsl(var(--text-3))]">
+                  KITT solo importa mensajes dentro de esta ventana. Con 36k mensajes recomendamos 15-30 días.
+                </p>
               </div>
+
+              {/* Whitelist de contactos/grupos */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center justify-between">
+                  <Label>Contactos y grupos a sincronizar</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadWaChats}
+                    loading={loadingChats}
+                  >
+                    {loadingChats ? "Cargando..." : "Cargar chats"}
+                  </Button>
+                </div>
+
+                {waChats.length > 0 ? (
+                  <div className="border border-[hsl(var(--border))] rounded-lg overflow-hidden">
+                    <div className="p-2 bg-[hsl(var(--surface-2))] border-b border-[hsl(var(--border))]">
+                      <p className="text-xs text-[hsl(var(--text-3))]">
+                        {waWhitelist.length === 0
+                          ? "Sin filtro — se sincronizan todos los chats de la ventana de tiempo"
+                          : `${waWhitelist.length} seleccionado(s) — solo estos chats se sincronizan`}
+                      </p>
+                    </div>
+                    <div className="max-h-52 overflow-y-auto divide-y divide-[hsl(var(--border))]">
+                      {waChats.map((c) => {
+                        const selected = waWhitelist.includes(c.jid)
+                        return (
+                          <button
+                            key={c.jid}
+                            onClick={() => toggleWhitelist(c.jid)}
+                            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-[hsl(var(--surface-2))] ${selected ? "bg-[hsl(var(--accent-soft))]" : ""}`}
+                          >
+                            <span className={`h-4 w-4 rounded border flex-shrink-0 flex items-center justify-center text-[10px] font-bold transition-colors ${
+                              selected
+                                ? "bg-[hsl(var(--accent))] border-[hsl(var(--accent))] text-white"
+                                : "border-[hsl(var(--border-2))]"
+                            }`}>
+                              {selected ? "✓" : ""}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm text-[hsl(var(--text))] truncate">{c.name ?? c.jid}</p>
+                              <p className="text-[10px] text-[hsl(var(--text-3))] truncate">{c.jid}</p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {waWhitelist.length > 0 && (
+                      <div className="p-2 border-t border-[hsl(var(--border))]">
+                        <button
+                          onClick={() => setWaWhitelist([])}
+                          className="text-xs text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]"
+                        >
+                          Limpiar selección (sincronizar todos)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[hsl(var(--text-3))]">
+                    Presioná "Cargar chats" para ver tus contactos y grupos disponibles (requiere WhatsApp conectado).
+                  </p>
+                )}
+              </div>
+
+              {/* Sincronizar */}
+              {waStatus === "connected" && (
+                <div className="space-y-2">
+                  <Button
+                    onClick={handleSync}
+                    loading={syncing}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    {syncing ? "Sincronizando..." : "Sincronizar WhatsApp ahora"}
+                  </Button>
+                  {syncResult && (
+                    <p className={`text-xs ${syncResult.startsWith("Error") ? "text-red-500" : "text-green-600"}`}>
+                      {syncResult}
+                    </p>
+                  )}
+                  <p className="text-xs text-[hsl(var(--text-3))]">
+                    Importa mensajes de los últimos {waHistoryDays} días a KITT. Guarda la config primero.
+                  </p>
+                </div>
+              )}
             </Section>
 
             {/* Gmail */}

@@ -57,6 +57,24 @@ model WhatsappSession {
   tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
+model WhatsappMessage {
+  id           String   @id @default(cuid())
+  tenantId     String
+  externalId   String?  // ID del mensaje en Evolution API (key.id)
+  chatJid      String   // JID del contacto/grupo (ej: 5491157589161@s.whatsapp.net)
+  contactName  String?  // pushName del remitente
+  fromMe       Boolean  @default(false)
+  body         String   @db.Text
+  messageType  String   @default("text") // text | image | audio | video | document | sticker | other
+  timestamp    DateTime
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, chatJid, timestamp])
+  @@index([tenantId, timestamp])
+}
+
 model GmailConnection {
   id           String   @id @default(cuid())
   tenantId     String   @unique

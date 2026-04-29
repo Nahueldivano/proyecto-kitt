@@ -63,6 +63,27 @@ export async function register() {
       EXCEPTION WHEN duplicate_object THEN NULL; END $$
     `)
 
+    // ── WhatsappMessage ───────────────────────────────────────────────────────
+    await exec(`
+      CREATE TABLE IF NOT EXISTS "WhatsappMessage" (
+        "id"           TEXT  NOT NULL,
+        "tenantId"     TEXT  NOT NULL,
+        "externalId"   TEXT,
+        "chatJid"      TEXT  NOT NULL,
+        "contactName"  TEXT,
+        "fromMe"       BOOLEAN NOT NULL DEFAULT false,
+        "body"         TEXT  NOT NULL,
+        "messageType"  TEXT  NOT NULL DEFAULT 'text',
+        "timestamp"    TIMESTAMP(3) NOT NULL,
+        "metadata"     JSONB NOT NULL DEFAULT '{}',
+        "createdAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WhatsappMessage_pkey" PRIMARY KEY ("id")
+      )
+    `)
+    await exec(`CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId")`)
+    await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_chatJid_timestamp_idx" ON "WhatsappMessage"("tenantId", "chatJid", "timestamp")`)
+    await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_timestamp_idx" ON "WhatsappMessage"("tenantId", "timestamp")`)
+
     // ── GmailConnection ───────────────────────────────────────────────────────
     await exec(`
       CREATE TABLE IF NOT EXISTS "GmailConnection" (
