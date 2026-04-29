@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const tenantId = session.user.tenantId
   const diagnostics: string[] = []
 
-  // Asegurar que la tabla existe antes de insertar
+  // Intentar crear la tabla si no existe (best-effort — instrumentation.ts ya lo hace al arrancar)
   try {
     await db.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "WhatsappMessage" (
@@ -32,13 +32,25 @@ export async function POST(req: NextRequest) {
         CONSTRAINT "WhatsappMessage_pkey" PRIMARY KEY ("id")
       )
     `)
+    diagnostics.push("table OK")
+  } catch (e) {
+    diagnostics.push(`table create warning (may already exist): ${e}`)
+  }
+  try {
     await db.$executeRawUnsafe(
       `CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId")`
     )
-    diagnostics.push("table OK")
+    diagnostics.push("index OK")
   } catch (e) {
-    diagnostics.push(`table error: ${e}`)
-    return NextResponse.json({ error: "No se pudo crear la tabla", detail: String(e), diagnostics }, { status: 500 })
+    diagnostics.push(`index create warning (may already exist): ${e}`)
+  }
+  // Verificar que la tabla existe antes de continuar
+  try {
+    await db.$executeRawUnsafe(`SELECT 1 FROM "WhatsappMessage" LIMIT 1`)
+    diagnostics.push("table accessible")
+  } catch (e) {
+    diagnostics.push(`table not accessible: ${e}`)
+    return NextResponse.json({ error: "La tabla WhatsappMessage no existe o no es accesible", detail: String(e), diagnostics }, { status: 500 })
   }
 
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { config: true } })
