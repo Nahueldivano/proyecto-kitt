@@ -36,12 +36,24 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     diagnostics.push(`table create warning (may already exist): ${e}`)
   }
-  // Agregar columna externalId si no existe (deploys viejos no la tienen)
-  try {
-    await db.$executeRawUnsafe(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "externalId" TEXT`)
-    diagnostics.push("column externalId OK")
-  } catch (e) {
-    diagnostics.push(`column add warning: ${e}`)
+  // Agregar columnas faltantes para deploys viejos (idempotente)
+  const columnMigrations: [string, string][] = [
+    ["externalId",  `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "externalId"  TEXT`],
+    ["chatJid",     `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "chatJid"     TEXT NOT NULL DEFAULT ''`],
+    ["contactName", `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "contactName" TEXT`],
+    ["fromMe",      `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "fromMe"      BOOLEAN NOT NULL DEFAULT false`],
+    ["body",        `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "body"        TEXT NOT NULL DEFAULT ''`],
+    ["messageType", `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "messageType" TEXT NOT NULL DEFAULT 'text'`],
+    ["timestamp",   `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "timestamp"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`],
+    ["metadata",    `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "metadata"    JSONB NOT NULL DEFAULT '{}'`],
+  ]
+  for (const [col, sql] of columnMigrations) {
+    try {
+      await db.$executeRawUnsafe(sql)
+      diagnostics.push(`column ${col} OK`)
+    } catch (e) {
+      diagnostics.push(`column ${col} warning: ${e}`)
+    }
   }
   try {
     await db.$executeRawUnsafe(
