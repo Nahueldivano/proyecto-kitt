@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     diagnostics.push(`table create warning (may already exist): ${e}`)
   }
+  // Agregar columna externalId si no existe (deploys viejos no la tienen)
+  try {
+    await db.$executeRawUnsafe(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "externalId" TEXT`)
+    diagnostics.push("column externalId OK")
+  } catch (e) {
+    diagnostics.push(`column add warning: ${e}`)
+  }
   try {
     await db.$executeRawUnsafe(
       `CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId")`

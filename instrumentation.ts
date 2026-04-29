@@ -80,6 +80,7 @@ export async function register() {
         CONSTRAINT "WhatsappMessage_pkey" PRIMARY KEY ("id")
       )
     `)
+    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "externalId" TEXT`)
     await exec(`CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId")`)
     await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_chatJid_timestamp_idx" ON "WhatsappMessage"("tenantId", "chatJid", "timestamp")`)
     await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_timestamp_idx" ON "WhatsappMessage"("tenantId", "timestamp")`)
