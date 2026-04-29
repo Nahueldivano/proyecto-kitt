@@ -208,7 +208,8 @@ export function normalizeEvolutionMessage(raw: Record<string, unknown>): Evoluti
   }
 }
 
-// Lista los chats existentes en la instancia conectada
+// Lista los chats más recientes de la instancia (máximo 20).
+// Prioriza remoteJid sobre id interno de Evolution.
 export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
@@ -223,44 +224,52 @@ export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
   const data = await res.json()
   const chats = Array.isArray(data) ? data : data?.chats ?? []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (chats as any[])
+  const mapped = (chats as any[])
     .map((c) => {
-      const jid = c.id ?? c.remoteJid ?? c.jid
+      // remoteJid es el JID real de WhatsApp (5491...@s.whatsapp.net o @g.us)
+      // id / _id puede ser el ObjectId interno de Evolution — lo usamos solo como fallback
+      const jid = c.remoteJid ?? c.jid ?? (typeof c.id === "string" && c.id.includes("@") ? c.id : null)
       if (!jid) return null
+      const ts = c.lastMessageTimestamp ?? c.updatedAt ?? 0
       return {
         jid: String(jid),
-        name: c.name ?? c.pushName ?? c.subject ?? null,
-        unreadCount: typeof c.unreadCount === "number" ? c.unreadCount : undefined,
-        lastMessageTimestamp:
-          typeof c.lastMessageTimestamp === "number" ? c.lastMessageTimestamp : undefined,
+        name: c.name ?? c.pushName ?? c.subject ?? c.verifiedName ?? null,
+        lastMessageTimestamp: typeof ts === "number" ? ts : 0,
       } as EvolutionChat
     })
-    .filter((c): c is EvolutionChat => c !== null)
+    .filter((c): c is EvolutionChat => c !== null && c.jid.includes("@"))
+
+  // Ordenar por actividad más reciente y devolver solo los 20 más activos
+  return mapped
+    .sort((a, b) => (b.lastMessageTimestamp ?? 0) - (a.lastMessageTimestamp ?? 0))
+    .slice(0, 20)
 }
 
-// Trae el histórico de mensajes desde Evolution. Si chatJid se especifica,
-// filtra por ese chat. Si no, trae todos los recientes.
+// Trae mensajes en bloque sin filtrar por chat (una sola llamada).
+// El llamador filtra por whitelist y ventana de tiempo.
+// limit controla cuántos mensajes totales pide a Evolution.
 export async function findMessages(
   tenantId: string,
-  options: { chatJid?: string; limit?: number } = {}
+  options: { limit?: number } = {}
 ): Promise<EvolutionMessage[]> {
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
 
-  const limit = options.limit ?? 100
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = {}
-  if (options.chatJid) where.key = { remoteJid: options.chatJid }
-
+  // Pedimos sin filtro de chat — Evolution devuelve los más recientes globalmente
+  const limit = options.limit ?? 1000
   const res = await fetch(`${baseUrl}/chat/findMessages/${instanceName}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ where, limit }),
+    body: JSON.stringify({ where: {}, limit }),
   })
 
-  if (!res.ok) return []
+  if (!res.ok) {
+    console.warn(`[evolution] findMessages ${res.status}: ${await res.text().catch(() => "")}`)
+    return []
+  }
   const data = await res.json()
-  // Evolution puede devolver { messages: { records: [...] } } o un array directo
+
+  // Evolution puede devolver { messages: { records: [...] } } | { messages: [...] } | [...]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const records: any[] = Array.isArray(data)
     ? data

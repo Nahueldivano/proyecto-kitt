@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { findChats, findMessages } from "@/lib/evolution"
 
-// POST /api/whatsapp/sync — importa mensajes desde Evolution API a WhatsappMessage.
-// Respeta los filtros configurados por el tenant: ventana de tiempo + whitelist de contactos.
+const MAX_MSGS_PER_CHAT = 50
+
+// POST /api/whatsapp/sync — importa mensajes desde Evolution API.
+// Estrategia en bloque: una sola llamada a Evolution, luego filtra y agrupa en código.
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.tenantId) {
@@ -13,7 +15,6 @@ export async function POST(req: NextRequest) {
 
   const tenantId = session.user.tenantId
 
-  // Configuración del tenant
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { config: true } })
   const cfg = (tenant?.config ?? {}) as Record<string, unknown>
   const historyDays = Number(cfg.waHistoryDays ?? 30)
@@ -22,23 +23,32 @@ export async function POST(req: NextRequest) {
   const since = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
 
   try {
-    // 1. Traer lista de chats disponibles en la instancia
-    const chats = await findChats(tenantId)
-    const activeChats = whitelist.length > 0
-      ? chats.filter((c) => whitelist.includes(c.jid))
-      : chats
+    // Una sola llamada: pedimos los mensajes más recientes en bloque
+    const allMessages = await findMessages(tenantId, { limit: 2000 })
+
+    // Filtrar por ventana de tiempo
+    const recent = allMessages.filter((m) => m.timestamp >= since)
+
+    // Filtrar por whitelist (si hay)
+    const filtered = whitelist.length > 0
+      ? recent.filter((m) => whitelist.includes(m.chatJid))
+      : recent
+
+    // Agrupar por chatJid y limitar a MAX_MSGS_PER_CHAT por chat
+    const byChatJid = new Map<string, typeof filtered>()
+    for (const msg of filtered) {
+      const arr = byChatJid.get(msg.chatJid) ?? []
+      if (arr.length < MAX_MSGS_PER_CHAT) arr.push(msg)
+      byChatJid.set(msg.chatJid, arr)
+    }
 
     let totalSaved = 0
-    const errors: string[] = []
+    const chatsProcessed = byChatJid.size
 
-    // 2. Para cada chat, traer mensajes dentro de la ventana de tiempo
-    for (const chat of activeChats) {
-      try {
-        const msgs = await findMessages(tenantId, { chatJid: chat.jid, limit: 200 })
-        const recent = msgs.filter((m) => m.timestamp >= since)
-
-        for (const msg of recent) {
-          if (!msg.externalId) continue
+    for (const msgs of byChatJid.values()) {
+      for (const msg of msgs) {
+        if (!msg.externalId) continue
+        try {
           await db.$executeRawUnsafe(`
             INSERT INTO "WhatsappMessage"
               ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
@@ -49,25 +59,24 @@ export async function POST(req: NextRequest) {
             tenantId,
             msg.externalId,
             msg.chatJid,
-            msg.contactName ?? chat.name ?? null,
+            msg.contactName ?? null,
             msg.fromMe,
             msg.body,
             msg.messageType,
             msg.timestamp,
           )
           totalSaved++
+        } catch (err) {
+          console.warn("[whatsapp/sync] upsert error:", err)
         }
-      } catch (err) {
-        errors.push(`${chat.jid}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
 
     return NextResponse.json({
       ok: true,
-      chatsProcessed: activeChats.length,
+      chatsProcessed,
       messagesSaved: totalSaved,
       since: since.toISOString(),
-      errors: errors.length > 0 ? errors : undefined,
     })
   } catch (err) {
     console.error("[whatsapp/sync] error:", err)
@@ -75,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/whatsapp/sync — devuelve lista de chats disponibles para configurar whitelist
+// GET /api/whatsapp/sync — devuelve los 20 chats más recientes para configurar whitelist
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.tenantId) {

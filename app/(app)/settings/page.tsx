@@ -299,22 +299,22 @@ export default function SettingsPage() {
               <div className="space-y-1.5 mb-4">
                 <Label>Ventana de historial a sincronizar</Label>
                 <div className="flex gap-2">
-                  {[15, 30, 60].map((d) => (
+                  {[{ days: 7, label: "1 semana" }, { days: 15, label: "15 días" }, { days: 30, label: "30 días" }, { days: 60, label: "60 días" }].map(({ days, label }) => (
                     <button
-                      key={d}
-                      onClick={() => setWaHistoryDays(d)}
+                      key={days}
+                      onClick={() => setWaHistoryDays(days)}
                       className={`flex-1 py-1.5 rounded-lg border text-sm transition-colors ${
-                        waHistoryDays === d
+                        waHistoryDays === days
                           ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
                           : "border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:border-[hsl(var(--accent))]"
                       }`}
                     >
-                      {d} días
+                      {label}
                     </button>
                   ))}
                 </div>
                 <p className="text-xs text-[hsl(var(--text-3))]">
-                  KITT solo importa mensajes dentro de esta ventana. Con 36k mensajes recomendamos 15-30 días.
+                  KITT importa hasta 50 mensajes por chat dentro de esta ventana. Recomendamos 1 semana o 15 días.
                 </p>
               </div>
 
@@ -400,7 +400,7 @@ export default function SettingsPage() {
                     </p>
                   )}
                   <p className="text-xs text-[hsl(var(--text-3))]">
-                    Importa mensajes de los últimos {waHistoryDays} días a KITT. Guarda la config primero.
+                    Importa hasta 50 mensajes por chat de los últimos {waHistoryDays === 7 ? "7 días (1 semana)" : `${waHistoryDays} días`}. Guardá la config antes de sincronizar.
                   </p>
                 </div>
               )}
