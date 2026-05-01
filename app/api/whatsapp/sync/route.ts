@@ -14,7 +14,30 @@ export async function POST(req: NextRequest) {
   const tenantId = session.user.tenantId
   const diagnostics: string[] = []
 
-  // Intentar crear la tabla si no existe (best-effort — instrumentation.ts ya lo hace al arrancar)
+  // Si detectamos esquema viejo roto, dropear y recrear (no hay datos útiles)
+  try {
+    await db.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'WhatsappMessage'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'WhatsappMessage'
+            AND column_name = 'externalId'
+            AND ordinal_position <= 5
+        ) THEN
+          DROP TABLE "WhatsappMessage" CASCADE;
+        END IF;
+      END $$;
+    `)
+    diagnostics.push("schema check OK")
+  } catch (e) {
+    diagnostics.push(`schema check warning: ${e}`)
+  }
+  // Crear tabla con esquema correcto si no existe
   try {
     await db.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "WhatsappMessage" (
@@ -34,36 +57,18 @@ export async function POST(req: NextRequest) {
     `)
     diagnostics.push("table OK")
   } catch (e) {
-    diagnostics.push(`table create warning (may already exist): ${e}`)
+    diagnostics.push(`table create warning: ${e}`)
   }
-  // Agregar columnas faltantes para deploys viejos (idempotente)
-  const columnMigrations: [string, string][] = [
-    ["externalId",  `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "externalId"  TEXT`],
-    ["chatJid",     `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "chatJid"     TEXT NOT NULL DEFAULT ''`],
-    ["contactName", `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "contactName" TEXT`],
-    ["fromMe",      `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "fromMe"      BOOLEAN NOT NULL DEFAULT false`],
-    ["body",        `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "body"        TEXT NOT NULL DEFAULT ''`],
-    ["messageType", `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "messageType" TEXT NOT NULL DEFAULT 'text'`],
-    ["timestamp",   `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "timestamp"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`],
-    ["metadata",    `ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "metadata"    JSONB NOT NULL DEFAULT '{}'`],
-  ]
-  for (const [col, sql] of columnMigrations) {
-    try {
-      await db.$executeRawUnsafe(sql)
-      diagnostics.push(`column ${col} OK`)
-    } catch (e) {
-      diagnostics.push(`column ${col} warning: ${e}`)
-    }
-  }
+  // Índice parcial para ON CONFLICT con externalId nullable
   try {
     await db.$executeRawUnsafe(
-      `CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId")`
+      `CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId") WHERE "externalId" IS NOT NULL`
     )
     diagnostics.push("index OK")
   } catch (e) {
-    diagnostics.push(`index create warning (may already exist): ${e}`)
+    diagnostics.push(`index create warning: ${e}`)
   }
-  // Verificar que la tabla existe antes de continuar
+  // Verificar que la tabla existe y es accesible antes de continuar
   try {
     await db.$executeRawUnsafe(`SELECT 1 FROM "WhatsappMessage" LIMIT 1`)
     diagnostics.push("table accessible")
@@ -117,7 +122,7 @@ export async function POST(req: NextRequest) {
               ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
             VALUES
               (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, '{}', NOW())
-            ON CONFLICT ("tenantId","externalId") DO NOTHING
+            ON CONFLICT ("tenantId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
           `,
             tenantId,
             msg.externalId,

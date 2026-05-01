@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
       VALUES
         (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, '{}', NOW())
-      ON CONFLICT ("tenantId","externalId") DO NOTHING
+      ON CONFLICT ("tenantId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
     `,
       tenantId,
       msg.externalId,

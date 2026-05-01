@@ -64,6 +64,25 @@ export async function register() {
     `)
 
     // ── WhatsappMessage ───────────────────────────────────────────────────────
+    // Detecta esquema viejo roto y lo recrea limpio. La tabla no contiene
+    // datos útiles si el esquema está mal (todos los inserts fallaban).
+    await exec(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'WhatsappMessage'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'WhatsappMessage'
+            AND column_name = 'externalId'
+            AND ordinal_position <= 5
+        ) THEN
+          DROP TABLE "WhatsappMessage" CASCADE;
+        END IF;
+      END $$;
+    `)
     await exec(`
       CREATE TABLE IF NOT EXISTS "WhatsappMessage" (
         "id"           TEXT  NOT NULL,
@@ -80,15 +99,9 @@ export async function register() {
         CONSTRAINT "WhatsappMessage_pkey" PRIMARY KEY ("id")
       )
     `)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "externalId"  TEXT`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "chatJid"     TEXT NOT NULL DEFAULT ''`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "contactName" TEXT`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "fromMe"      BOOLEAN NOT NULL DEFAULT false`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "body"        TEXT NOT NULL DEFAULT ''`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "messageType" TEXT NOT NULL DEFAULT 'text'`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "timestamp"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`)
-    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "metadata"    JSONB NOT NULL DEFAULT '{}'`)
-    await exec(`CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId")`)
+    // Índice parcial: solo aplica unicidad cuando externalId no es NULL.
+    // Necesario para que ON CONFLICT funcione correctamente.
+    await exec(`CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId") WHERE "externalId" IS NOT NULL`)
     await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_chatJid_timestamp_idx" ON "WhatsappMessage"("tenantId", "chatJid", "timestamp")`)
     await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_timestamp_idx" ON "WhatsappMessage"("tenantId", "timestamp")`)
 
