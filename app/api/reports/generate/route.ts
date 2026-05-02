@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { chat } from "@/lib/claude"
+import { buildReportContext } from "@/lib/reportContext"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -17,27 +18,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Las instrucciones son requeridas" }, { status: 400 })
     }
 
+    const tenantId = session.user.tenantId
+    const { waContext, gmailContext } = await buildReportContext(tenantId)
+    const contextSection = [waContext, gmailContext].filter(Boolean).join("\n\n")
+
     const prompt = `Generá un reporte detallado para el usuario.
 Tipo: ${type}
 Título: ${title}
 Instrucciones: ${instructions}
-
-Usá la tool create_artifact para generar el contenido.
-- Si es un resumen o reporte de texto: usá type="document" con formato Markdown completo (headings, listas, negrita).
-- Si incluye gráficos o dashboards: usá type="html" con Chart.js desde CDN.
-El artefacto debe ser rico, completo y profesional.`
+${contextSection ? `\nCONTEXTO DISPONIBLE:\n${contextSection}\n` : ""}
+Usá la tool create_artifact con type="html" para generar el reporte.
+El HTML debe ser profesional y visualmente rico:
+- Usá Chart.js desde https://cdn.jsdelivr.net/npm/chart.js para gráficos de actividad si hay datos suficientes (mensajes por día, por chat, etc.)
+- Organizá el contenido en secciones claras con headings
+- Incluí resúmenes, métricas clave y destacados relevantes del contexto
+- Estilo limpio con colores suaves, tipografía legible, fondo oscuro (#0e0f11) o claro según corresponda
+El reporte debe responder las instrucciones del usuario usando los datos del contexto provisto.`
 
     const result = await chat(
       [{ role: "user", content: prompt }],
-      session.user.tenantId,
+      tenantId,
       null
     )
 
-    // Guardar en la base de datos
     const reportContent = result.artifact?.content ?? result.message
     const saved = await db.report.create({
       data: {
-        tenantId: session.user.tenantId,
+        tenantId,
         type,
         content: reportContent,
       },

@@ -25,7 +25,7 @@ const navItems = [
   },
   {
     href: "/whatsapp-db",
-    label: "WA DB",
+    label: "DB",
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.5" : "2"} strokeLinecap="round" strokeLinejoin="round">
         <ellipse cx="12" cy="5" rx="9" ry="3" />

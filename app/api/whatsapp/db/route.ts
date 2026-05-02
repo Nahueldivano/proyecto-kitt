@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 
 interface ChatRow {
   chatJid: string
+  chatName: string | null
   contactName: string | null
   messageCount: bigint | number
   lastMessageAt: Date
@@ -14,6 +15,7 @@ interface MessageRow {
   id: string
   externalId: string | null
   chatJid: string
+  chatName: string | null
   contactName: string | null
   fromMe: boolean
   body: string
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest) {
   try {
     if (chatJid) {
       const messages = await db.$queryRawUnsafe<MessageRow[]>(
-        `SELECT "id","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata"
+        `SELECT "id","externalId","chatJid","chatName","contactName","fromMe","body","messageType","timestamp","metadata"
          FROM "WhatsappMessage"
          WHERE "tenantId" = $1 AND "chatJid" = $2
          ORDER BY "timestamp" ASC
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
 
     if (q) {
       const messages = await db.$queryRawUnsafe<MessageRow[]>(
-        `SELECT "id","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata"
+        `SELECT "id","externalId","chatJid","chatName","contactName","fromMe","body","messageType","timestamp","metadata"
          FROM "WhatsappMessage"
          WHERE "tenantId" = $1 AND "body" ILIKE $2
          ORDER BY "timestamp" DESC
@@ -67,6 +69,10 @@ export async function GET(req: NextRequest) {
     const chats = await db.$queryRawUnsafe<ChatRow[]>(
       `SELECT
          "chatJid",
+         (SELECT "chatName" FROM "WhatsappMessage" m2
+          WHERE m2."tenantId" = m1."tenantId" AND m2."chatJid" = m1."chatJid"
+            AND m2."chatName" IS NOT NULL
+          ORDER BY m2."timestamp" DESC LIMIT 1) AS "chatName",
          (SELECT "contactName" FROM "WhatsappMessage" m2
           WHERE m2."tenantId" = m1."tenantId" AND m2."chatJid" = m1."chatJid"
             AND m2."contactName" IS NOT NULL

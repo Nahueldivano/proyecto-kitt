@@ -150,6 +150,7 @@ export interface EvolutionMessage {
   externalId: string
   chatJid: string
   contactName: string | null
+  chatName: string | null
   fromMe: boolean
   body: string
   messageType: string
@@ -201,6 +202,7 @@ export function normalizeEvolutionMessage(raw: Record<string, unknown>): Evoluti
     externalId,
     chatJid,
     contactName,
+    chatName: null, // filled by sync/webhook from findGroupNames()
     fromMe,
     body,
     messageType: type,
@@ -208,6 +210,19 @@ export function normalizeEvolutionMessage(raw: Record<string, unknown>): Evoluti
     messageKey: { id: externalId, remoteJid: chatJid, fromMe },
     raw,
   }
+}
+
+// Devuelve un mapa JID → nombre de grupo para todos los @g.us del tenant.
+// Reutiliza findChats() que ya extrae c.subject como nombre de grupo.
+export async function findGroupNames(tenantId: string): Promise<Map<string, string>> {
+  const chats = await findChats(tenantId)
+  const map = new Map<string, string>()
+  for (const c of chats) {
+    if (c.jid.endsWith("@g.us") && c.name) {
+      map.set(c.jid, c.name)
+    }
+  }
+  return map
 }
 
 // Devuelve un mapa JID → nombre del agenda (pushName/notify) leyendo el

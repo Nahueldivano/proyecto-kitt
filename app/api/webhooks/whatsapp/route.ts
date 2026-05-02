@@ -89,18 +89,27 @@ export async function POST(req: NextRequest) {
       ? JSON.stringify({ messageKey: msg.messageKey, transcribed })
       : "{}"
 
+    // Para grupos intentar extraer el nombre del grupo del payload
+    const isGroup = msg.chatJid.endsWith("@g.us")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawMsg = rawMessage as any
+    const chatName = isGroup
+      ? (rawMsg?.groupMetadata?.subject ?? rawMsg?.groupName ?? null)
+      : null
+
     // Guardar en tabla dedicada WhatsappMessage (upsert por externalId)
     await db.$executeRawUnsafe(`
       INSERT INTO "WhatsappMessage"
-        ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
+        ("id","tenantId","externalId","chatJid","contactName","chatName","fromMe","body","messageType","timestamp","metadata","createdAt")
       VALUES
-        (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
+        (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
       ON CONFLICT ("tenantId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
     `,
       tenantId,
       msg.externalId,
       msg.chatJid,
       msg.contactName,
+      chatName,
       msg.fromMe,
       msgBody,
       msg.messageType,

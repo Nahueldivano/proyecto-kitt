@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       "assistantName",
       "tone",
       "model",
-      "reportSchedule",
+      "reportSchedules",
       "notifyViaWhatsapp",
       "notifyViaEmail",
       "anthropicApiKey",

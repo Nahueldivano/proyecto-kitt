@@ -272,6 +272,7 @@ async function executeTool(
       // Traer chats agrupados: nombre, JID, cantidad de mensajes, último mensaje
       const rows = await db.$queryRawUnsafe<Array<{
         chatJid: string
+        chatName: string | null
         contactName: string | null
         messageCount: bigint
         lastBody: string
@@ -280,6 +281,7 @@ async function executeTool(
       }>>(`
         SELECT
           "chatJid",
+          (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName",
           MAX("contactName") AS "contactName",
           COUNT(*) AS "messageCount",
           (ARRAY_AGG("body" ORDER BY "timestamp" DESC))[1] AS "lastBody",
@@ -299,7 +301,7 @@ async function executeTool(
       }
 
       const formatted = rows.map((r, i) => {
-        const name = r.contactName ?? r.chatJid
+        const name = r.chatName ?? r.contactName ?? r.chatJid
         const dir = r.lastFromMe ? "→" : "←"
         const ts = r.lastTs.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
         return `${i + 1}. ${name} [${r.chatJid}] — ${Number(r.messageCount)} msgs — ${ts}\n   ${dir} ${String(r.lastBody).substring(0, 80)}`
@@ -320,7 +322,7 @@ async function executeTool(
           SELECT "chatJid", MAX("contactName") AS "contactName"
           FROM "WhatsappMessage"
           WHERE "tenantId" = $1
-            AND ("chatJid" ILIKE $2 OR "contactName" ILIKE $2)
+            AND ("chatJid" ILIKE $2 OR "contactName" ILIKE $2 OR "chatName" ILIKE $2)
           GROUP BY "chatJid"
           LIMIT 1
         `, tenantId, `%${chatInput}%`)
@@ -331,12 +333,13 @@ async function executeTool(
 
       const messages = await db.$queryRawUnsafe<Array<{
         fromMe: boolean
+        chatName: string | null
         contactName: string | null
         body: string
         messageType: string
         timestamp: Date
       }>>(`
-        SELECT "fromMe", "contactName", "body", "messageType", "timestamp"
+        SELECT "fromMe", "chatName", "contactName", "body", "messageType", "timestamp"
         FROM "WhatsappMessage"
         WHERE "tenantId" = $1 AND "chatJid" = $2
         ORDER BY "timestamp" DESC
@@ -347,17 +350,19 @@ async function executeTool(
         return { toolResult: `No se encontraron mensajes para "${chatInput}". Usá list_whatsapp_chats para ver los JIDs disponibles.` }
       }
 
-      const name = messages.find(m => m.contactName)?.contactName ?? chatJid
+      const chatLabel = messages.find(m => m.chatName)?.chatName ?? messages.find(m => m.contactName)?.contactName ?? chatJid
       const formatted = messages
         .reverse()
         .map((m) => {
-          const dir = m.fromMe ? "Yo" : name
           const ts = m.timestamp.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
-          return `[${ts}] ${dir}: ${m.body}`
+          if (m.fromMe) return `[${ts}] Yo: ${m.body}`
+          const sender = m.contactName ?? "Contacto"
+          const groupSuffix = m.chatName ? ` (en ${m.chatName})` : ""
+          return `[${ts}] ${sender}${groupSuffix}: ${m.body}`
         })
         .join("\n")
 
-      return { toolResult: `Conversación con ${name} (${messages.length} mensajes):\n\n${formatted}` }
+      return { toolResult: `Conversación con ${chatLabel} (${messages.length} mensajes):\n\n${formatted}` }
     }
 
     case "search_whatsapp_messages": {
@@ -367,12 +372,13 @@ async function executeTool(
 
       const messages = await db.$queryRawUnsafe<Array<{
         chatJid: string
+        chatName: string | null
         contactName: string | null
         fromMe: boolean
         body: string
         timestamp: Date
       }>>(`
-        SELECT "chatJid", "contactName", "fromMe", "body", "timestamp"
+        SELECT "chatJid", "chatName", "contactName", "fromMe", "body", "timestamp"
         FROM "WhatsappMessage"
         WHERE "tenantId" = $1
           AND "body" ILIKE $2
@@ -386,9 +392,11 @@ async function executeTool(
       }
 
       const formatted = messages.map((m) => {
-        const name = m.fromMe ? "Yo" : (m.contactName ?? m.chatJid)
         const ts = m.timestamp.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
-        return `[${ts}] ${name}: ${m.body.substring(0, 150)}`
+        if (m.fromMe) return `[${ts}] Yo: ${m.body.substring(0, 150)}`
+        const sender = m.contactName ?? m.chatJid
+        const groupSuffix = m.chatName ? ` (en ${m.chatName})` : ""
+        return `[${ts}] ${sender}${groupSuffix}: ${m.body.substring(0, 150)}`
       }).join("\n")
 
       return { toolResult: `Mensajes con "${query}" (${messages.length} resultados):\n\n${formatted}` }

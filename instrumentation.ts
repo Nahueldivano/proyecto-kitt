@@ -104,6 +104,7 @@ export async function register() {
     await exec(`CREATE UNIQUE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_externalId_key" ON "WhatsappMessage"("tenantId", "externalId") WHERE "externalId" IS NOT NULL`)
     await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_chatJid_timestamp_idx" ON "WhatsappMessage"("tenantId", "chatJid", "timestamp")`)
     await exec(`CREATE INDEX IF NOT EXISTS "WhatsappMessage_tenantId_timestamp_idx" ON "WhatsappMessage"("tenantId", "timestamp")`)
+    await exec(`ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "chatName" TEXT`)
 
     // ── GmailConnection ───────────────────────────────────────────────────────
     await exec(`
