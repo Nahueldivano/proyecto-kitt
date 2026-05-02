@@ -1,7 +1,7 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { findChats, findMessages } from "@/lib/evolution"
+import { findChats, findContacts, findMessages } from "@/lib/evolution"
 
 const MAX_MSGS_PER_CHAT = 50
 
@@ -85,6 +85,10 @@ export async function POST(req: NextRequest) {
   const since = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
   diagnostics.push(`historyDays=${historyDays}, since=${since.toISOString()}, whitelist=${JSON.stringify(whitelist)}`)
 
+  // Cargar el mapa de contactos del agenda para enriquecer nombres de chats 1:1
+  const contactsMap = await findContacts(tenantId)
+  diagnostics.push(`contacts loaded: ${contactsMap.size}`)
+
   try {
     // Traer mensajes en bloque desde Evolution
     const allMessages = await findMessages(tenantId, { limit: 2000 })
@@ -117,21 +121,28 @@ export async function POST(req: NextRequest) {
       for (const msg of msgs) {
         if (!msg.externalId) { totalSkipped++; continue }
         try {
+          // Nombre: prioridad pushName del mensaje, luego agenda
+          const contactName = msg.contactName ?? contactsMap.get(msg.chatJid) ?? null
+          // Para audios, guardamos messageKey en metadata para poder transcribir después
+          const metadata = msg.messageType === "audio"
+            ? JSON.stringify({ messageKey: msg.messageKey })
+            : "{}"
           await db.$executeRawUnsafe(`
             INSERT INTO "WhatsappMessage"
               ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
             VALUES
-              (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, '{}', NOW())
+              (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
             ON CONFLICT ("tenantId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
           `,
             tenantId,
             msg.externalId,
             msg.chatJid,
-            msg.contactName ?? null,
+            contactName,
             msg.fromMe,
             msg.body,
             msg.messageType,
             msg.timestamp,
+            metadata,
           )
           totalSaved++
         } catch (err) {

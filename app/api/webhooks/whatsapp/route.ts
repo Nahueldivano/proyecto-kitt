@@ -63,12 +63,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // Para audios, guardar messageKey en metadata para poder transcribir después
+    const metadata = msg.messageType === "audio"
+      ? JSON.stringify({ messageKey: msg.messageKey })
+      : "{}"
+
     // Guardar en tabla dedicada WhatsappMessage (upsert por externalId)
     await db.$executeRawUnsafe(`
       INSERT INTO "WhatsappMessage"
         ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
       VALUES
-        (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, '{}', NOW())
+        (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
       ON CONFLICT ("tenantId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
     `,
       tenantId,
@@ -79,6 +84,7 @@ export async function POST(req: NextRequest) {
       msg.body,
       msg.messageType,
       msg.timestamp,
+      metadata,
     )
 
     // Actualizar estado de sesión a connected

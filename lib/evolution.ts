@@ -154,6 +154,7 @@ export interface EvolutionMessage {
   body: string
   messageType: string
   timestamp: Date
+  messageKey: { id: string; remoteJid: string; fromMe: boolean }
   raw: unknown
 }
 
@@ -204,7 +205,62 @@ export function normalizeEvolutionMessage(raw: Record<string, unknown>): Evoluti
     body,
     messageType: type,
     timestamp,
+    messageKey: { id: externalId, remoteJid: chatJid, fromMe },
     raw,
+  }
+}
+
+// Devuelve un mapa JID → nombre del agenda (pushName/notify) leyendo el
+// endpoint findContacts de Evolution. Sirve para enriquecer chats individuales
+// que vienen sin name/subject.
+export async function findContacts(tenantId: string): Promise<Map<string, string>> {
+  try {
+    const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
+    const instanceName = getInstanceName(tenantId)
+    const res = await fetch(`${baseUrl}/chat/findContacts/${instanceName}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) return new Map()
+    const data = await res.json()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contacts: any[] = Array.isArray(data) ? data : data?.contacts ?? data?.records ?? []
+    const map = new Map<string, string>()
+    for (const c of contacts) {
+      const jid = c.remoteJid ?? c.jid ?? c.id
+      const name = c.pushName ?? c.name ?? c.notify ?? c.verifiedName
+      if (jid && name && String(jid).includes("@")) {
+        map.set(String(jid), String(name))
+      }
+    }
+    return map
+  } catch (err) {
+    console.warn("[evolution] findContacts error:", err)
+    return new Map()
+  }
+}
+
+// Descarga el contenido base64 de un mensaje multimedia (audio, imagen, etc.)
+export async function getMessageMediaBase64(
+  tenantId: string,
+  messageKey: { id: string; remoteJid: string; fromMe: boolean }
+): Promise<{ base64: string; mimetype: string } | null> {
+  try {
+    const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
+    const instanceName = getInstanceName(tenantId)
+    const res = await fetch(`${baseUrl}/chat/getBase64FromMediaMessage/${instanceName}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message: { key: messageKey }, convertToMp4: false }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data?.base64) return null
+    return { base64: String(data.base64), mimetype: String(data.mimetype ?? "audio/ogg") }
+  } catch (err) {
+    console.warn("[evolution] getMessageMediaBase64 error:", err)
+    return null
   }
 }
 
@@ -223,6 +279,10 @@ export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
   if (!res.ok) return []
   const data = await res.json()
   const chats = Array.isArray(data) ? data : data?.chats ?? []
+
+  // Cargamos en paralelo el mapa de contactos del agenda para chats 1:1
+  const contactsMap = await findContacts(tenantId)
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapped = (chats as any[])
     .map((c) => {
@@ -230,10 +290,14 @@ export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
       // id / _id puede ser el ObjectId interno de Evolution — lo usamos solo como fallback
       const jid = c.remoteJid ?? c.jid ?? (typeof c.id === "string" && c.id.includes("@") ? c.id : null)
       if (!jid) return null
+      const jidStr = String(jid)
       const ts = c.lastMessageTimestamp ?? c.updatedAt ?? 0
+      const rawName = c.name ?? c.pushName ?? c.subject ?? c.verifiedName ?? null
+      // Si no hay nombre desde el chat, usamos el del agenda
+      const name = rawName ?? contactsMap.get(jidStr) ?? null
       return {
-        jid: String(jid),
-        name: c.name ?? c.pushName ?? c.subject ?? c.verifiedName ?? null,
+        jid: jidStr,
+        name,
         lastMessageTimestamp: typeof ts === "number" ? ts : 0,
       } as EvolutionChat
     })

@@ -12,6 +12,7 @@ type ConfigKey =
   | "googleClientSecret"
   | "kittInternalKey"
   | "kittAdminEmail"
+  | "openaiKey"
 
 // Mapeo de keys de DB a variables de entorno
 const ENV_FALLBACK: Record<ConfigKey, string> = {
@@ -22,6 +23,7 @@ const ENV_FALLBACK: Record<ConfigKey, string> = {
   googleClientSecret: "GOOGLE_CLIENT_SECRET",
   kittInternalKey: "KITT_INTERNAL_KEY",
   kittAdminEmail: "KITT_ADMIN_EMAIL",
+  openaiKey: "OPENAI_API_KEY",
 }
 
 // Cache en memoria con TTL de 10 segundos
