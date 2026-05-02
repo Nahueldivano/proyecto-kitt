@@ -2,7 +2,7 @@ import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { getMessageMediaBase64 } from "@/lib/evolution"
-import { transcribeAudioBase64 } from "@/lib/whisper"
+import { getTenantOpenAIKey, transcribeAudioBase64 } from "@/lib/whisper"
 
 interface AudioRow {
   id: string
@@ -58,6 +58,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 
+  const openaiKey = await getTenantOpenAIKey(tenantId)
+  if (!openaiKey) {
+    return NextResponse.json({ error: "OpenAI API key no configurada. Agregala en Configuración → API Key de OpenAI." }, { status: 400 })
+  }
+
   let transcribed = 0
   let failed = 0
   const errors: string[] = []
@@ -81,7 +86,7 @@ export async function POST(req: NextRequest) {
         errors.push(`${row.id}: no media`)
         continue
       }
-      const text = await transcribeAudioBase64(media.base64, media.mimetype)
+      const text = await transcribeAudioBase64(media.base64, media.mimetype, openaiKey)
       if (!text) {
         failed++
         errors.push(`${row.id}: transcripción vacía`)

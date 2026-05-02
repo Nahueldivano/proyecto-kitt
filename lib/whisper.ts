@@ -1,12 +1,36 @@
 import { getConfig } from "@/lib/config"
+import { decrypt } from "@/lib/crypto"
+import { db } from "@/lib/db"
+
+// Resuelve la OpenAI key para un tenant:
+// 1. openaiApiKey en config del tenant (encriptada)
+// 2. OPENAI_API_KEY en AppConfig DB (global admin)
+// 3. process.env.OPENAI_API_KEY (fallback)
+export async function getTenantOpenAIKey(tenantId: string): Promise<string> {
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { config: true },
+    })
+    const cfg = (tenant?.config ?? {}) as Record<string, string>
+    if (cfg.openaiApiKey) {
+      try {
+        return decrypt(cfg.openaiApiKey)
+      } catch {}
+    }
+  } catch {}
+
+  // Fallback global (AppConfig DB o env)
+  return getConfig("openaiKey")
+}
 
 // Transcribe un audio en base64 usando OpenAI Whisper.
 // Devuelve null si no hay API key o si la transcripción falla.
 export async function transcribeAudioBase64(
   base64: string,
-  mimetype: string
+  mimetype: string,
+  apiKey: string
 ): Promise<string | null> {
-  const apiKey = await getConfig("openaiKey")
   if (!apiKey) return null
 
   try {

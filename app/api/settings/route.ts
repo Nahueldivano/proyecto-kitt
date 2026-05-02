@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       "notifyViaWhatsapp",
       "notifyViaEmail",
       "anthropicApiKey",
+      "openaiApiKey",
       "trackedEntities",
       "waMonitorPrompt",
       "gmailMonitorPrompt",
@@ -68,9 +69,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Encriptar API key de Anthropic antes de guardar
+    // Encriptar API keys antes de guardar
     if (updates.anthropicApiKey && typeof updates.anthropicApiKey === "string") {
       updates.anthropicApiKey = encrypt(updates.anthropicApiKey)
+    }
+    if (updates.openaiApiKey && typeof updates.openaiApiKey === "string") {
+      updates.openaiApiKey = encrypt(updates.openaiApiKey)
     }
 
     const newConfig = { ...currentConfig, ...updates }

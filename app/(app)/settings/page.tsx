@@ -15,6 +15,7 @@ interface TenantConfig {
   tone?: string
   model?: string
   anthropicApiKey?: string
+  openaiApiKey?: string
   waMonitorPrompt?: string
   gmailMonitorPrompt?: string
 }
@@ -44,6 +45,8 @@ export default function SettingsPage() {
   const [resettingOnboarding, setResettingOnboarding] = useState(false)
   const [apiKeyVisible, setApiKeyVisible] = useState(false)
   const [apiKeyInput, setApiKeyInput] = useState("")
+  const [openaiKeyVisible, setOpenaiKeyVisible] = useState(false)
+  const [openaiKeyInput, setOpenaiKeyInput] = useState("")
   const [waPrompt, setWaPrompt] = useState("")
   const [gmailPrompt, setGmailPrompt] = useState("")
   const [waHistoryDays, setWaHistoryDays] = useState<number>(30)
@@ -106,6 +109,7 @@ export default function SettingsPage() {
     try {
       const payload: Record<string, unknown> = { ...config, ...extra }
       if (apiKeyInput.trim()) payload.anthropicApiKey = apiKeyInput.trim()
+      if (openaiKeyInput.trim()) payload.openaiApiKey = openaiKeyInput.trim()
       await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,6 +117,7 @@ export default function SettingsPage() {
       })
       setSaved(true)
       setApiKeyInput("")
+      setOpenaiKeyInput("")
       setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
@@ -256,6 +261,26 @@ export default function SettingsPage() {
               </div>
               <p className="text-xs text-[hsl(var(--text-3))] mt-2">
                 {config.anthropicApiKey ? "API key guardada (encriptada)" : "Sin API key configurada"}
+              </p>
+            </Section>
+
+            <Section title="API Key de OpenAI">
+              <p className="text-xs text-[hsl(var(--text-3))] mb-3">
+                Opcional. Se usa para transcribir audios de WhatsApp con Whisper. Conseguila en platform.openai.com
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type={openaiKeyVisible ? "text" : "password"}
+                  placeholder="sk-..."
+                  value={openaiKeyInput}
+                  onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                />
+                <Button variant="outline" onClick={() => setOpenaiKeyVisible((v) => !v)} className="shrink-0">
+                  {openaiKeyVisible ? "Ocultar" : "Ver"}
+                </Button>
+              </div>
+              <p className="text-xs text-[hsl(var(--text-3))] mt-2">
+                {config.openaiApiKey ? "API key guardada (encriptada)" : "Sin API key configurada"}
               </p>
             </Section>
 

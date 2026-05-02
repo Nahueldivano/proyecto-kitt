@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { normalizeEvolutionMessage } from "@/lib/evolution"
+import { normalizeEvolutionMessage, getMessageMediaBase64 } from "@/lib/evolution"
+import { getTenantOpenAIKey, transcribeAudioBase64 } from "@/lib/whisper"
 
 // Webhook recibido de Evolution API — no requiere auth de usuario
 // Evolution API envía eventos por cada mensaje entrante de WhatsApp
@@ -63,9 +64,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Para audios, guardar messageKey en metadata para poder transcribir después
+    // Para audios: intentar transcripción inmediata si el tenant tiene key de OpenAI
+    let msgBody = msg.body
+    let transcribed = false
+    if (msg.messageType === "audio") {
+      try {
+        const openaiKey = await getTenantOpenAIKey(tenantId)
+        if (openaiKey) {
+          const media = await getMessageMediaBase64(tenantId, msg.messageKey)
+          if (media) {
+            const text = await transcribeAudioBase64(media.base64, media.mimetype, openaiKey)
+            if (text) {
+              msgBody = text
+              transcribed = true
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[webhooks/whatsapp] audio transcription error:", e)
+      }
+    }
+
     const metadata = msg.messageType === "audio"
-      ? JSON.stringify({ messageKey: msg.messageKey })
+      ? JSON.stringify({ messageKey: msg.messageKey, transcribed })
       : "{}"
 
     // Guardar en tabla dedicada WhatsappMessage (upsert por externalId)
@@ -81,7 +102,7 @@ export async function POST(req: NextRequest) {
       msg.chatJid,
       msg.contactName,
       msg.fromMe,
-      msg.body,
+      msgBody,
       msg.messageType,
       msg.timestamp,
       metadata,

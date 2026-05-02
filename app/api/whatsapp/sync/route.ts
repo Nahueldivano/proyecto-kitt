@@ -1,7 +1,8 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { findChats, findContacts, findMessages } from "@/lib/evolution"
+import { findChats, findContacts, findMessages, getMessageMediaBase64 } from "@/lib/evolution"
+import { getTenantOpenAIKey, transcribeAudioBase64 } from "@/lib/whisper"
 
 const MAX_MSGS_PER_CHAT = 50
 
@@ -113,20 +114,44 @@ export async function POST(req: NextRequest) {
     }
     diagnostics.push(`chats to sync: ${byChatJid.size}`)
 
+    // Resolver OpenAI key una sola vez para todos los audios
+    const openaiKey = await getTenantOpenAIKey(tenantId)
+    diagnostics.push(`openai key: ${openaiKey ? "configurada" : "no configurada"}`)
+
     let totalSaved = 0
     let totalSkipped = 0
+    let totalTranscribed = 0
     const insertErrors: string[] = []
 
     for (const [jid, msgs] of byChatJid.entries()) {
       for (const msg of msgs) {
         if (!msg.externalId) { totalSkipped++; continue }
         try {
-          // Nombre: prioridad pushName del mensaje, luego agenda
           const contactName = msg.contactName ?? contactsMap.get(msg.chatJid) ?? null
-          // Para audios, guardamos messageKey en metadata para poder transcribir después
+
+          // Intentar transcripción inmediata si es audio y hay key disponible
+          let body = msg.body
+          let transcribed = false
+          if (msg.messageType === "audio" && openaiKey) {
+            try {
+              const media = await getMessageMediaBase64(tenantId, msg.messageKey)
+              if (media) {
+                const text = await transcribeAudioBase64(media.base64, media.mimetype, openaiKey)
+                if (text) {
+                  body = text
+                  transcribed = true
+                  totalTranscribed++
+                }
+              }
+            } catch {
+              // Si falla la transcripción, guardar placeholder y seguir
+            }
+          }
+
           const metadata = msg.messageType === "audio"
-            ? JSON.stringify({ messageKey: msg.messageKey })
+            ? JSON.stringify({ messageKey: msg.messageKey, transcribed })
             : "{}"
+
           await db.$executeRawUnsafe(`
             INSERT INTO "WhatsappMessage"
               ("id","tenantId","externalId","chatJid","contactName","fromMe","body","messageType","timestamp","metadata","createdAt")
@@ -139,7 +164,7 @@ export async function POST(req: NextRequest) {
             msg.chatJid,
             contactName,
             msg.fromMe,
-            msg.body,
+            body,
             msg.messageType,
             msg.timestamp,
             metadata,
@@ -158,6 +183,7 @@ export async function POST(req: NextRequest) {
       chatsProcessed: byChatJid.size,
       messagesSaved: totalSaved,
       messagesSkipped: totalSkipped,
+      audiosTranscribed: totalTranscribed,
       insertErrors: insertErrors.slice(0, 5),
       since: since.toISOString(),
       diagnostics,
