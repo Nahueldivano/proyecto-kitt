@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { findChats, findContacts, findGroupNames, findMessages, getMessageMediaBase64 } from "@/lib/evolution"
 import { getTenantOpenAIKey, transcribeAudioBase64 } from "@/lib/whisper"
 
-const MAX_MSGS_PER_CHAT = 50
+// Sin límite por chat — se guardan todos los mensajes dentro de la ventana de tiempo
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -116,69 +116,51 @@ export async function POST(req: NextRequest) {
   if (retroUpdated > 0) diagnostics.push(`retroactive chatName update: ${retroUpdated} rows`)
 
   try {
-    // Traer mensajes en bloque desde Evolution
-    const allMessages = await findMessages(tenantId, { limit: 2000 })
+    // Traer mensajes en bloque desde Evolution — sin límite artificial
+    const allMessages = await findMessages(tenantId, { limit: 10000 })
     diagnostics.push(`evolution returned ${allMessages.length} messages`)
 
     // Filtrar por ventana de tiempo
     const recent = allMessages.filter((m) => m.timestamp >= since && m.timestamp <= until)
     diagnostics.push(`after time filter: ${recent.length} messages`)
 
-    // Filtrar por whitelist
+    // Filtrar por whitelist (JID exacto)
     const filtered = whitelist.length > 0
       ? recent.filter((m) => whitelist.includes(m.chatJid))
       : recent
     diagnostics.push(`after whitelist filter: ${filtered.length} messages`)
 
-    // Agrupar por chatJid, máx MAX_MSGS_PER_CHAT por chat
+    // Agrupar por chatJid para stats (sin límite por chat)
     const byChatJid = new Map<string, typeof filtered>()
     for (const msg of filtered) {
       const arr = byChatJid.get(msg.chatJid) ?? []
-      if (arr.length < MAX_MSGS_PER_CHAT) arr.push(msg)
+      arr.push(msg)
       byChatJid.set(msg.chatJid, arr)
     }
     diagnostics.push(`chats to sync: ${byChatJid.size}`)
 
-    // Resolver OpenAI key una sola vez para todos los audios
-    const openaiKey = await getTenantOpenAIKey(tenantId)
-    diagnostics.push(`openai key: ${openaiKey ? "configurada" : "no configurada"}`)
-
     let totalSaved = 0
     let totalSkipped = 0
-    let totalTranscribed = 0
     const insertErrors: string[] = []
 
-    for (const [jid, msgs] of byChatJid.entries()) {
+    // FASE 1: insertar todos los mensajes (sin transcribir aún)
+    for (const msgs of byChatJid.values()) {
       for (const msg of msgs) {
         if (!msg.externalId) { totalSkipped++; continue }
         try {
-          const contactName = msg.contactName ?? contactsMap.get(msg.chatJid) ?? null
           const isGroup = msg.chatJid.endsWith("@g.us")
+          // En grupos: contactName = quien envió. En 1:1: nombre del contacto del agenda
+          const contactName = isGroup
+            ? (msg.contactName ?? null)
+            : (msg.contactName ?? contactsMap.get(msg.chatJid) ?? null)
           const chatName = isGroup ? (groupNamesMap.get(msg.chatJid) ?? null) : null
 
-          // Intentar transcripción inmediata si es audio y hay key disponible
-          let body = msg.body
-          let transcribed = false
-          if (msg.messageType === "audio" && openaiKey) {
-            try {
-              const media = await getMessageMediaBase64(tenantId, msg.messageKey)
-              if (media) {
-                const text = await transcribeAudioBase64(media.base64, media.mimetype, openaiKey)
-                if (text) {
-                  body = text
-                  transcribed = true
-                  totalTranscribed++
-                }
-              }
-            } catch {
-              // Si falla la transcripción, guardar placeholder y seguir
-            }
-          }
-
           const metadata = msg.messageType === "audio"
-            ? JSON.stringify({ messageKey: msg.messageKey, transcribed })
+            ? JSON.stringify({ messageKey: msg.messageKey, transcribed: false })
             : "{}"
 
+          // ON CONFLICT DO NOTHING — no sobreescribe mensajes ya guardados
+          // $executeRawUnsafe devuelve el número de filas afectadas
           await db.$executeRawUnsafe(`
             INSERT INTO "WhatsappMessage"
               ("id","tenantId","externalId","chatJid","contactName","chatName","fromMe","body","messageType","timestamp","metadata","createdAt")
@@ -186,24 +168,64 @@ export async function POST(req: NextRequest) {
               (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NOW())
             ON CONFLICT ("tenantId","externalId") WHERE "externalId" IS NOT NULL DO NOTHING
           `,
-            tenantId,
-            msg.externalId,
-            msg.chatJid,
-            contactName,
-            chatName,
-            msg.fromMe,
-            body,
-            msg.messageType,
-            msg.timestamp,
-            metadata,
+            tenantId, msg.externalId, msg.chatJid, contactName, chatName,
+            msg.fromMe, msg.body, msg.messageType, msg.timestamp, metadata,
           )
           totalSaved++
         } catch (err) {
-          const e = `[${jid}] ${err instanceof Error ? err.message : String(err)}`
+          const e = `[${msg.chatJid}] ${err instanceof Error ? err.message : String(err)}`
           insertErrors.push(e)
           console.warn("[whatsapp/sync] insert error:", e)
         }
       }
+    }
+
+    // FASE 2: transcribir todos los audios pendientes del tenant (nuevos + viejos sin transcribir)
+    let totalTranscribed = 0
+    let transcribeErrors = 0
+    const openaiKey = await getTenantOpenAIKey(tenantId)
+    diagnostics.push(`openai key: ${openaiKey ? "configurada" : "no configurada"}`)
+
+    if (openaiKey) {
+      // Buscar todos los audios sin transcribir del tenant
+      const pendingAudios = await db.$queryRawUnsafe<Array<{
+        id: string; externalId: string | null; chatJid: string; fromMe: boolean; metadata: unknown
+      }>>(
+        `SELECT "id","externalId","chatJid","fromMe","metadata"
+         FROM "WhatsappMessage"
+         WHERE "tenantId" = $1 AND "messageType" = 'audio' AND "body" = '[audio]'
+         ORDER BY "timestamp" DESC
+         LIMIT 200`,
+        tenantId,
+      )
+      diagnostics.push(`pending audios to transcribe: ${pendingAudios.length}`)
+
+      for (const row of pendingAudios) {
+        const meta = (row.metadata ?? {}) as Record<string, unknown>
+        const mk = meta.messageKey as { id: string; remoteJid: string; fromMe: boolean } | undefined
+        const key = mk ?? (row.externalId
+          ? { id: row.externalId, remoteJid: row.chatJid, fromMe: row.fromMe }
+          : null)
+        if (!key) { transcribeErrors++; continue }
+
+        try {
+          const media = await getMessageMediaBase64(tenantId, key)
+          if (!media) { transcribeErrors++; continue }
+          const text = await transcribeAudioBase64(media.base64, media.mimetype, openaiKey)
+          if (!text) { transcribeErrors++; continue }
+          await db.$executeRawUnsafe(
+            `UPDATE "WhatsappMessage" SET "body" = $1, "metadata" = $2::jsonb WHERE "id" = $3 AND "tenantId" = $4`,
+            text,
+            JSON.stringify({ ...meta, messageKey: key, transcribed: true }),
+            row.id,
+            tenantId,
+          )
+          totalTranscribed++
+        } catch {
+          transcribeErrors++
+        }
+      }
+      diagnostics.push(`transcribed: ${totalTranscribed}, errors: ${transcribeErrors}`)
     }
 
     return NextResponse.json({
@@ -214,6 +236,7 @@ export async function POST(req: NextRequest) {
       audiosTranscribed: totalTranscribed,
       insertErrors: insertErrors.slice(0, 5),
       since: since.toISOString(),
+      until: until.toISOString(),
       diagnostics,
     })
   } catch (err) {
