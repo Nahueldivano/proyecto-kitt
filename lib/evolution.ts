@@ -318,10 +318,10 @@ export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
     })
     .filter((c): c is EvolutionChat => c !== null && c.jid.includes("@"))
 
-  // Ordenar por actividad más reciente y devolver solo los 20 más activos
+  // Ordenar por actividad más reciente y devolver hasta 200 chats
   return mapped
     .sort((a, b) => (b.lastMessageTimestamp ?? 0) - (a.lastMessageTimestamp ?? 0))
-    .slice(0, 20)
+    .slice(0, 200)
 }
 
 // Trae mensajes en bloque sin filtrar por chat (una sola llamada).

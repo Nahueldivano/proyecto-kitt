@@ -78,13 +78,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "La tabla WhatsappMessage no existe o no es accesible", detail: String(e), diagnostics }, { status: 500 })
   }
 
+  // Leer body para overrides opcionales: since, until, historyDays
+  let bodyData: Record<string, unknown> = {}
+  try { bodyData = await req.json() } catch { /* body vacío es válido */ }
+
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { config: true } })
   const cfg = (tenant?.config ?? {}) as Record<string, unknown>
-  const historyDays = Number(cfg.waHistoryDays ?? 30)
+  const configHistoryDays = Number(cfg.waHistoryDays ?? 7)
+  const historyDays = bodyData.historyDays ? Number(bodyData.historyDays) : configHistoryDays
   const whitelist: string[] = Array.isArray(cfg.waContactWhitelist) ? (cfg.waContactWhitelist as string[]) : []
 
-  const since = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
-  diagnostics.push(`historyDays=${historyDays}, since=${since.toISOString()}, whitelist=${JSON.stringify(whitelist)}`)
+  const since = bodyData.since
+    ? new Date(String(bodyData.since))
+    : new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
+  const until = bodyData.until ? new Date(String(bodyData.until)) : new Date()
+  diagnostics.push(`historyDays=${historyDays}, since=${since.toISOString()}, until=${until.toISOString()}, whitelist=${JSON.stringify(whitelist)}`)
 
   // Cargar contactos y nombres de grupos en paralelo
   const [contactsMap, groupNamesMap] = await Promise.all([
@@ -93,13 +101,27 @@ export async function POST(req: NextRequest) {
   ])
   diagnostics.push(`contacts loaded: ${contactsMap.size}, groups: ${groupNamesMap.size}`)
 
+  // Actualizar chatName retroactivo en filas existentes sin nombre
+  let retroUpdated = 0
+  for (const [jid, name] of groupNamesMap.entries()) {
+    try {
+      const result = await db.$executeRawUnsafe(`
+        UPDATE "WhatsappMessage"
+        SET "chatName" = $1
+        WHERE "tenantId" = $2 AND "chatJid" = $3 AND "chatName" IS NULL
+      `, name, tenantId, jid)
+      retroUpdated += Number(result)
+    } catch { /* ignorar errores individuales */ }
+  }
+  if (retroUpdated > 0) diagnostics.push(`retroactive chatName update: ${retroUpdated} rows`)
+
   try {
     // Traer mensajes en bloque desde Evolution
     const allMessages = await findMessages(tenantId, { limit: 2000 })
     diagnostics.push(`evolution returned ${allMessages.length} messages`)
 
     // Filtrar por ventana de tiempo
-    const recent = allMessages.filter((m) => m.timestamp >= since)
+    const recent = allMessages.filter((m) => m.timestamp >= since && m.timestamp <= until)
     diagnostics.push(`after time filter: ${recent.length} messages`)
 
     // Filtrar por whitelist

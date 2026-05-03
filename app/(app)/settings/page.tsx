@@ -49,7 +49,10 @@ export default function SettingsPage() {
   const [openaiKeyInput, setOpenaiKeyInput] = useState("")
   const [waPrompt, setWaPrompt] = useState("")
   const [gmailPrompt, setGmailPrompt] = useState("")
-  const [waHistoryDays, setWaHistoryDays] = useState<number>(30)
+  const [waHistoryDays, setWaHistoryDays] = useState<number>(7)
+  const [waUseCustomRange, setWaUseCustomRange] = useState(false)
+  const [waCustomSince, setWaCustomSince] = useState("")
+  const [waCustomUntil, setWaCustomUntil] = useState("")
   const [waChats, setWaChats] = useState<{ jid: string; name: string | null }[]>([])
   const [waWhitelist, setWaWhitelist] = useState<string[]>([])
   const [loadingChats, setLoadingChats] = useState(false)
@@ -189,10 +192,24 @@ export default function SettingsPage() {
     setSyncing(true)
     setSyncResult(null)
     try {
-      const res = await fetch("/api/whatsapp/sync", { method: "POST" })
+      const body: Record<string, unknown> = {}
+      if (waUseCustomRange) {
+        if (waCustomSince) body.since = new Date(waCustomSince).toISOString()
+        if (waCustomUntil) body.until = new Date(waCustomUntil + "T23:59:59").toISOString()
+      } else {
+        body.historyDays = waHistoryDays
+      }
+      const res = await fetch("/api/whatsapp/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
       const d = await res.json()
       if (d.ok) {
-        setSyncResult(`Sincronizado: ${d.messagesSaved} mensajes de ${d.chatsProcessed} chats (últimos ${waHistoryDays} días)`)
+        const rangeLabel = waUseCustomRange
+          ? `${waCustomSince || "?"} → ${waCustomUntil || "hoy"}`
+          : `últimos ${waHistoryDays} días`
+        setSyncResult(`Sincronizado: ${d.messagesSaved} mensajes de ${d.chatsProcessed} chats (${rangeLabel})`)
       } else {
         setSyncResult(`Error: ${d.error ?? "desconocido"}`)
       }
@@ -321,15 +338,15 @@ export default function SettingsPage() {
               )}
 
               {/* Ventana de tiempo */}
-              <div className="space-y-1.5 mb-4">
+              <div className="space-y-2 mb-4">
                 <Label>Ventana de historial a sincronizar</Label>
                 <div className="flex gap-2">
-                  {[{ days: 7, label: "1 semana" }, { days: 15, label: "15 días" }, { days: 30, label: "30 días" }, { days: 60, label: "60 días" }].map(({ days, label }) => (
+                  {[{ days: 7, label: "7 días" }, { days: 14, label: "14 días" }, { days: 30, label: "30 días" }].map(({ days, label }) => (
                     <button
                       key={days}
-                      onClick={() => setWaHistoryDays(days)}
+                      onClick={() => { setWaHistoryDays(days); setWaUseCustomRange(false) }}
                       className={`flex-1 py-1.5 rounded-lg border text-sm transition-colors ${
-                        waHistoryDays === days
+                        !waUseCustomRange && waHistoryDays === days
                           ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
                           : "border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:border-[hsl(var(--accent))]"
                       }`}
@@ -337,9 +354,41 @@ export default function SettingsPage() {
                       {label}
                     </button>
                   ))}
+                  <button
+                    onClick={() => setWaUseCustomRange(true)}
+                    className={`flex-1 py-1.5 rounded-lg border text-sm transition-colors ${
+                      waUseCustomRange
+                        ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
+                        : "border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:border-[hsl(var(--accent))]"
+                    }`}
+                  >
+                    Rango
+                  </button>
                 </div>
+                {waUseCustomRange && (
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1 space-y-1">
+                      <p className="text-[10px] text-[hsl(var(--text-3))]">Desde</p>
+                      <input
+                        type="date"
+                        value={waCustomSince}
+                        onChange={(e) => setWaCustomSince(e.target.value)}
+                        className="w-full px-2 py-1.5 text-sm rounded-lg border border-[hsl(var(--border-2))] bg-[hsl(var(--background))] text-[hsl(var(--text))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))]"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-[10px] text-[hsl(var(--text-3))]">Hasta</p>
+                      <input
+                        type="date"
+                        value={waCustomUntil}
+                        onChange={(e) => setWaCustomUntil(e.target.value)}
+                        className="w-full px-2 py-1.5 text-sm rounded-lg border border-[hsl(var(--border-2))] bg-[hsl(var(--background))] text-[hsl(var(--text))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))]"
+                      />
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-[hsl(var(--text-3))]">
-                  KITT importa hasta 50 mensajes por chat dentro de esta ventana. Recomendamos 1 semana o 15 días.
+                  KITT importa hasta 50 mensajes por chat dentro de esta ventana.
                 </p>
               </div>
 
@@ -368,23 +417,40 @@ export default function SettingsPage() {
                     </div>
                     <div className="max-h-52 overflow-y-auto divide-y divide-[hsl(var(--border))]">
                       {waChats.map((c) => {
-                        const selected = waWhitelist.includes(c.jid)
+                        const isSelected = waWhitelist.includes(c.jid)
+                        const isGroup = c.jid.endsWith("@g.us")
+                        const isLid = c.jid.endsWith("@lid")
+                        const badge = isGroup ? "Grupo" : isLid ? "LID" : "Contacto"
+                        const badgeColor = isGroup
+                          ? "bg-purple-500/20 text-purple-400"
+                          : isLid
+                          ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-blue-500/20 text-blue-400"
+                        const cleanNumber = c.jid.replace(/@.+$/, "")
+                        const displayLabel = c.name?.trim()
+                          ? c.name
+                          : isGroup
+                          ? `Grupo ${cleanNumber.slice(-6)}`
+                          : `+${cleanNumber}`
                         return (
                           <button
                             key={c.jid}
                             onClick={() => toggleWhitelist(c.jid)}
-                            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-[hsl(var(--surface-2))] ${selected ? "bg-[hsl(var(--accent-soft))]" : ""}`}
+                            className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-[hsl(var(--surface-2))] ${isSelected ? "bg-[hsl(var(--accent-soft))]" : ""}`}
                           >
                             <span className={`h-4 w-4 rounded border flex-shrink-0 flex items-center justify-center text-[10px] font-bold transition-colors ${
-                              selected
+                              isSelected
                                 ? "bg-[hsl(var(--accent))] border-[hsl(var(--accent))] text-white"
                                 : "border-[hsl(var(--border-2))]"
                             }`}>
-                              {selected ? "✓" : ""}
+                              {isSelected ? "✓" : ""}
                             </span>
-                            <div className="min-w-0">
-                              <p className="text-sm text-[hsl(var(--text))] truncate">{c.name ?? c.jid}</p>
-                              <p className="text-[10px] text-[hsl(var(--text-3))] truncate">{c.jid}</p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>
+                                <p className="text-sm text-[hsl(var(--text))] truncate">{displayLabel}</p>
+                              </div>
+                              {c.name && <p className="text-[10px] text-[hsl(var(--text-3))] truncate">+{cleanNumber}</p>}
                             </div>
                           </button>
                         )

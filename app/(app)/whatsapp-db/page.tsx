@@ -94,6 +94,10 @@ function WhatsAppPanel() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
   const [transcribingId, setTranscribingId] = useState<string | null>(null)
   const [batchTranscribing, setBatchTranscribing] = useState(false)
+  const [syncDays, setSyncDays] = useState<number>(7)
+  const [syncUseCustomRange, setSyncUseCustomRange] = useState(false)
+  const [syncSince, setSyncSince] = useState("")
+  const [syncUntil, setSyncUntil] = useState("")
 
   const loadChats = useCallback(async () => {
     setLoading(true)
@@ -137,7 +141,18 @@ function WhatsAppPanel() {
   const onSync = useCallback(async () => {
     setSyncing(true); setSyncStatus(null)
     try {
-      const r = await fetch("/api/whatsapp/sync", { method: "POST" })
+      const body: Record<string, unknown> = {}
+      if (syncUseCustomRange) {
+        if (syncSince) body.since = new Date(syncSince).toISOString()
+        if (syncUntil) body.until = new Date(syncUntil + "T23:59:59").toISOString()
+      } else {
+        body.historyDays = syncDays
+      }
+      const r = await fetch("/api/whatsapp/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
       const d = await r.json()
       if (d.ok) {
         setSyncStatus(`Sincronizado: ${d.messagesSaved ?? 0} mensajes nuevos`)
@@ -149,7 +164,7 @@ function WhatsAppPanel() {
     } catch (err) {
       setSyncStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
     } finally { setSyncing(false) }
-  }, [loadChats, loadMessages, selected])
+  }, [loadChats, loadMessages, selected, syncDays, syncUseCustomRange, syncSince, syncUntil])
 
   const onTranscribe = useCallback(async (msg: MessageRow) => {
     setTranscribingId(msg.id)
@@ -214,6 +229,48 @@ function WhatsAppPanel() {
             onKeyDown={(e) => { if (e.key === "Enter") onSearch() }}
             className="w-full px-3 py-2 text-sm rounded-md bg-[hsl(var(--surface))] border border-[hsl(var(--border))] text-[hsl(var(--text))] placeholder:text-[hsl(var(--text-3))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))]"
           />
+
+          {/* Selector de rango para sync */}
+          <div className="space-y-1.5">
+            <div className="flex gap-1">
+              {[{ d: 7, l: "7d" }, { d: 14, l: "14d" }, { d: 30, l: "30d" }].map(({ d, l }) => (
+                <button
+                  key={d}
+                  onClick={() => { setSyncDays(d); setSyncUseCustomRange(false) }}
+                  className={`flex-1 py-1 text-[11px] rounded border transition-colors ${
+                    !syncUseCustomRange && syncDays === d
+                      ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
+                      : "border-[hsl(var(--border-2))] text-[hsl(var(--text-3))] hover:border-[hsl(var(--accent))]"
+                  }`}
+                >{l}</button>
+              ))}
+              <button
+                onClick={() => setSyncUseCustomRange(true)}
+                className={`flex-1 py-1 text-[11px] rounded border transition-colors ${
+                  syncUseCustomRange
+                    ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
+                    : "border-[hsl(var(--border-2))] text-[hsl(var(--text-3))] hover:border-[hsl(var(--accent))]"
+                }`}
+              >Rango</button>
+            </div>
+            {syncUseCustomRange && (
+              <div className="flex gap-1.5">
+                <input
+                  type="date"
+                  value={syncSince}
+                  onChange={(e) => setSyncSince(e.target.value)}
+                  className="flex-1 px-2 py-1 text-xs rounded border border-[hsl(var(--border-2))] bg-[hsl(var(--surface))] text-[hsl(var(--text))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))]"
+                />
+                <span className="text-[10px] text-[hsl(var(--text-3))] self-center">→</span>
+                <input
+                  type="date"
+                  value={syncUntil}
+                  onChange={(e) => setSyncUntil(e.target.value)}
+                  className="flex-1 px-2 py-1 text-xs rounded border border-[hsl(var(--border-2))] bg-[hsl(var(--surface))] text-[hsl(var(--text))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--accent))]"
+                />
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-2">
             <button
