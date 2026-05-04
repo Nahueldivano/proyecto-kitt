@@ -341,7 +341,7 @@ export default function SettingsPage() {
               <div className="space-y-2 mb-4">
                 <Label>Ventana de historial a sincronizar</Label>
                 <div className="flex gap-2">
-                  {[{ days: 7, label: "7 días" }, { days: 14, label: "14 días" }, { days: 30, label: "30 días" }].map(({ days, label }) => (
+                  {[{ days: 7, label: "1 semana" }, { days: 15, label: "15 días" }, { days: 30, label: "30 días" }, { days: 60, label: "60 días" }].map(({ days, label }) => (
                     <button
                       key={days}
                       onClick={() => { setWaHistoryDays(days); setWaUseCustomRange(false) }}
@@ -388,7 +388,7 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <p className="text-xs text-[hsl(var(--text-3))]">
-                  KITT importa hasta 50 mensajes por chat dentro de esta ventana.
+                  KITT sincroniza todos los mensajes dentro de esta ventana de tiempo.
                 </p>
               </div>
 
@@ -491,7 +491,7 @@ export default function SettingsPage() {
                     </p>
                   )}
                   <p className="text-xs text-[hsl(var(--text-3))]">
-                    Importa hasta 50 mensajes por chat de los últimos {waHistoryDays === 7 ? "7 días (1 semana)" : `${waHistoryDays} días`}. Guardá la config antes de sincronizar.
+                    Sincroniza todos los mensajes de los últimos {waHistoryDays === 7 ? "7 días (1 semana)" : `${waHistoryDays} días`}. Guardá la config antes de sincronizar.
                   </p>
                 </div>
               )}
