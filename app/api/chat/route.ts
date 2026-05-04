@@ -124,7 +124,10 @@ export async function POST(req: NextRequest) {
                         content: finalMessage || "Procesé tu solicitud.",
                         type: artifact ? "artifact" : "text",
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        metadata: (pendingActionId ? { pendingActionId, actionType, actionPayload } : {}) as any,
+                        metadata: ({
+                          ...(pendingActionId ? { pendingActionId, actionType, actionPayload } : {}),
+                          ...(artifact ? { artifact } : {}),
+                        }) as any,
                       },
                     ],
                   })

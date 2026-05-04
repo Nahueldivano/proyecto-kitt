@@ -110,6 +110,7 @@ export function ChatInterface() {
                 updateLastMessage(streamedTextRef.current)
               } else if (data.type === "artifact") {
                 setArtifact(data.artifact)
+                patchLastMessage({ metadata: { artifact: data.artifact } })
               } else if (data.type === "pending_action") {
                 patchLastMessage({ pendingActionId: data.pendingActionId, metadata: { actionType: data.actionType, actionPayload: data.actionPayload } })
               } else if (data.type === "task_batch") {
