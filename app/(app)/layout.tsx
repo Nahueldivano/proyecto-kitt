@@ -38,8 +38,8 @@ export default async function AppLayout({
         {/* Header mobile */}
         <MobileHeader waConnected={waConnected} gmailConnected={gmailConnected} />
 
-        {/* Contenido */}
-        <main className="flex-1 overflow-hidden">
+        {/* Contenido — en mobile deja espacio para el nav bottom fijo */}
+        <main className="flex-1 overflow-hidden pb-mobile-nav md:pb-0">
           {children}
         </main>
 

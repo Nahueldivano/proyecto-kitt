@@ -75,7 +75,7 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
   }, [addAttachedFile])
 
   return (
-    <div className="border-t border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-3">
+    <div className="border-t border-[hsl(var(--border))] bg-[hsl(var(--surface))] px-3 py-3 pb-safe">
       {/* Chips de acciones rápidas — solo cuando no hay mensajes */}
       {!isStreaming && !disabled && messages.length === 0 && (
         <div className="flex flex-wrap gap-2 mb-3 max-w-3xl mx-auto">

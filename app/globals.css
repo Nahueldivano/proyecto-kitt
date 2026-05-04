@@ -83,6 +83,9 @@
 
 html {
   -webkit-tap-highlight-color: transparent;
+  /* En móvil el viewport cambia cuando aparece el teclado virtual.
+     resizes-content hace que el layout se achique, no que se scrollee. */
+  height: 100%;
 }
 
 body {
@@ -91,6 +94,28 @@ body {
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  /* Prevenir scroll del body en mobile — el scroll va dentro de los paneles */
+  overflow: hidden;
+}
+
+/* Safe area para iPhone con notch / Dynamic Island */
+.pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.px-safe {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Espacio extra en mobile para el nav bottom fijo (56px aprox) */
+@media (max-width: 767px) {
+  .pb-mobile-nav {
+    padding-bottom: calc(56px + max(0px, env(safe-area-inset-bottom)));
+  }
 }
 
 /* Touch targets optimizados para mobile */

@@ -2,8 +2,6 @@ import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Node-only packages that webpack must NOT bundle.
-  // pg/pgpass/pg-connection-string use fs/path/stream which break the client/edge bundle.
   serverExternalPackages: [
     "@prisma/client",
     "@prisma/adapter-pg",
@@ -27,6 +25,25 @@ const nextConfig: NextConfig = {
         hostname: "lh3.googleusercontent.com",
       },
     ],
+  },
+  // Asegurar que los assets estáticos se sirven con headers correctos
+  // para evitar problemas con proxies reversos (Traefik/nginx en Easypanel)
+  async headers() {
+    return [
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+        ],
+      },
+      {
+        source: "/public/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=86400" },
+        ],
+      },
+    ]
   },
 }
 

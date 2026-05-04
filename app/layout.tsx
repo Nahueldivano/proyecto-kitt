@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/providers/ThemeProvider"
 import { SessionProvider } from "@/components/providers/SessionProvider"
@@ -7,7 +7,18 @@ import "./globals.css"
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
+  display: "swap",
 })
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  // Hace que el layout se achique cuando aparece el teclado virtual en Android
+  interactiveWidget: "resizes-content",
+}
 
 export const metadata: Metadata = {
   title: "KITT — Asistente Empresarial IA",
@@ -21,6 +32,11 @@ export const metadata: Metadata = {
     description: "Tu asistente empresarial de inteligencia artificial",
     images: [{ url: "/kitt-logo.png", width: 1904, height: 1536 }],
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "KITT",
+  },
 }
 
 export default function RootLayout({
@@ -30,7 +46,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" suppressHydrationWarning className={inter.variable}>
-      <body>
+      {/* CSS crítico inline: garantiza que las variables del design system
+          estén disponibles aunque el stylesheet externo tarde en cargar */}
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: `
+          :root{--background:0 0% 100%;--surface:0 0% 98%;--surface-2:0 0% 95%;--border:0 0% 90%;--border-2:0 0% 82%;--text:0 0% 9%;--text-2:0 0% 32%;--text-3:0 0% 55%;--accent:238 84% 67%;--accent-hover:238 84% 60%;--accent-soft:238 84% 67% / 0.1;--success:142 71% 45%;--warning:38 92% 50%;--destructive:0 84% 60%;--radius:0.5rem}
+          .dark{--background:222 14% 8%;--surface:222 14% 11%;--surface-2:222 14% 15%;--border:222 14% 20%;--border-2:222 14% 27%;--text:0 0% 95%;--text-2:0 0% 70%;--text-3:0 0% 48%;--accent:238 84% 67%}
+          body{background-color:hsl(var(--background));color:hsl(var(--text));font-family:ui-sans-serif,system-ui,sans-serif;margin:0}
+        `}} />
+      </head>
+      <body className={inter.variable}>
         <SessionProvider>
           <ThemeProvider
             attribute="class"
