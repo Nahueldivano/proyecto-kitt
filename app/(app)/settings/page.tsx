@@ -341,7 +341,7 @@ export default function SettingsPage() {
               <div className="space-y-2 mb-4">
                 <Label>Ventana de historial a sincronizar</Label>
                 <div className="flex gap-2">
-                  {[{ days: 7, label: "1 semana" }, { days: 15, label: "15 días" }, { days: 30, label: "30 días" }, { days: 60, label: "60 días" }].map(({ days, label }) => (
+                  {[{ days: 7, label: "1 semana" }, { days: 15, label: "15 días" }, { days: 30, label: "30 días" }].map(({ days, label }) => (
                     <button
                       key={days}
                       onClick={() => { setWaHistoryDays(days); setWaUseCustomRange(false) }}
@@ -499,6 +499,26 @@ export default function SettingsPage() {
 
             {/* Gmail */}
             <Section title="Gmail">
+              {/* Banner de éxito al volver del OAuth */}
+              {searchParams.get("gmail") === "connected" && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-500 text-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Gmail conectado correctamente
+                </div>
+              )}
+              {searchParams.get("error") === "gmail_denied" && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  Permiso denegado en Google
+                </div>
+              )}
+              {searchParams.get("error") === "gmail_failed" && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  Error al conectar Gmail. Intentá de nuevo.
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className={`h-2 w-2 rounded-full ${gmailConnected ? "bg-green-500" : "bg-[hsl(var(--text-3))]"}`} />

@@ -9,8 +9,9 @@ export async function GET() {
   }
 
   try {
-    const authUrl = await getAuthUrl()
-    return NextResponse.redirect(authUrl)
+    const url = await getAuthUrl()
+    // Devolver la URL como JSON para que el cliente haga window.location.href
+    return NextResponse.json({ url })
   } catch (error) {
     console.error("[email/connect] error:", error)
     return NextResponse.json({ error: "Error al iniciar conexión Gmail" }, { status: 500 })
