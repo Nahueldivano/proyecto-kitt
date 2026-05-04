@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
   ])
   diagnostics.push(`contacts loaded: ${contactsMap.size}, groups: ${groupNamesMap.size}`)
 
-  // Actualizar chatName retroactivo en filas existentes sin nombre
+  // Actualizar chatName retroactivo para grupos
   let retroUpdated = 0
   for (const [jid, name] of groupNamesMap.entries()) {
     try {
@@ -113,7 +113,24 @@ export async function POST(req: NextRequest) {
       retroUpdated += Number(result)
     } catch { /* ignorar errores individuales */ }
   }
+
+  // Corregir contactName en chats 1:1 donde quedó guardado el nombre propio
+  // (pushName del mensaje fromMe=true). Priorizar siempre el nombre de la agenda.
+  let contactsFixed = 0
+  for (const [jid, agendaName] of contactsMap.entries()) {
+    if (jid.endsWith("@g.us")) continue
+    try {
+      const result = await db.$executeRawUnsafe(`
+        UPDATE "WhatsappMessage"
+        SET "contactName" = $1
+        WHERE "tenantId" = $2 AND "chatJid" = $3
+          AND ("contactName" IS NULL OR "contactName" != $1)
+      `, agendaName, tenantId, jid)
+      contactsFixed += Number(result)
+    } catch { /* ignorar errores individuales */ }
+  }
   if (retroUpdated > 0) diagnostics.push(`retroactive chatName update: ${retroUpdated} rows`)
+  if (contactsFixed > 0) diagnostics.push(`contactName fixed from agenda: ${contactsFixed} rows`)
 
   try {
     // Traer mensajes en bloque desde Evolution — sin límite artificial
@@ -149,10 +166,11 @@ export async function POST(req: NextRequest) {
         if (!msg.externalId) { totalSkipped++; continue }
         try {
           const isGroup = msg.chatJid.endsWith("@g.us")
-          // En grupos: contactName = quien envió. En 1:1: nombre del contacto del agenda
+          // En grupos: contactName = quien envió el mensaje (pushName)
+          // En 1:1: siempre el nombre de la agenda (contactsMap), nunca el pushName propio
           const contactName = isGroup
             ? (msg.contactName ?? null)
-            : (msg.contactName ?? contactsMap.get(msg.chatJid) ?? null)
+            : (contactsMap.get(msg.chatJid) ?? (!msg.fromMe ? msg.contactName : null) ?? null)
           const chatName = isGroup ? (groupNamesMap.get(msg.chatJid) ?? null) : null
 
           const metadata = msg.messageType === "audio"

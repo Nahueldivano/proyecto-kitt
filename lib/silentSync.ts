@@ -34,7 +34,9 @@ export async function silentSync(tenantId: string): Promise<void> {
   for (const msg of filtered) {
     if (!msg.externalId) continue
     const isGroup = msg.chatJid.endsWith("@g.us")
-    const contactName = isGroup ? (msg.contactName ?? null) : (msg.contactName ?? contactsMap.get(msg.chatJid) ?? null)
+    const contactName = isGroup
+      ? (msg.contactName ?? null)
+      : (contactsMap.get(msg.chatJid) ?? (!msg.fromMe ? msg.contactName : null) ?? null)
     const chatName = isGroup ? (groupNamesMap.get(msg.chatJid) ?? null) : null
     const metadata = msg.messageType === "audio"
       ? JSON.stringify({ messageKey: msg.messageKey, transcribed: false })
