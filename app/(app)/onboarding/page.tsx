@@ -161,12 +161,25 @@ export default function OnboardingPage() {
             <p className="text-sm font-semibold text-[hsl(var(--text))]">Configuración inicial</p>
             <p className="text-xs text-[hsl(var(--text-3))]">KITT te va a hacer algunas preguntas</p>
           </div>
-          {isDone && (
-            <div className="ml-auto flex items-center gap-2 text-xs text-emerald-500">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Redirigiendo al chat...
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-3">
+            {isDone ? (
+              <div className="flex items-center gap-2 text-xs text-emerald-500">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                Redirigiendo al chat...
+              </div>
+            ) : (
+              <button
+                onClick={async () => {
+                  await fetch("/api/onboarding/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })
+                  await update({ onboardingDone: true })
+                  window.location.href = "/chat"
+                }}
+                className="text-xs text-[hsl(var(--text-3))] hover:text-[hsl(var(--text-2))] underline underline-offset-2 transition-colors"
+              >
+                Saltar configuración
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

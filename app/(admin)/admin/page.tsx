@@ -12,7 +12,7 @@ interface Tenant {
   id: string
   name: string
   createdAt: string
-  users: { email: string; onboardingDone: boolean }[]
+  users: { id: string; email: string; onboardingDone: boolean }[]
   whatsappSession: { status: string } | null
   gmailConnection: { email: string } | null
   _count: { conversations: number; reports: number; pendingActions: number }
@@ -226,6 +226,9 @@ export default function AdminPage() {
                         <Badge variant={tenant.gmailConnection ? "success" : "default"}>
                           Gmail
                         </Badge>
+                        <Badge variant={tenant.users[0]?.onboardingDone ? "success" : "default"}>
+                          {tenant.users[0]?.onboardingDone ? "Activo" : "Onboarding"}
+                        </Badge>
                       </div>
                     </div>
 
@@ -233,6 +236,21 @@ export default function AdminPage() {
                       <span>{tenant._count.conversations} conversaciones</span>
                       <span>{tenant._count.reports} reportes</span>
                       <span>{tenant._count.pendingActions} acciones</span>
+                      {tenant.users[0] && !tenant.users[0].onboardingDone && (
+                        <button
+                          onClick={async () => {
+                            const r = await fetch("/api/admin/tenants", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ userId: tenant.users[0].id, onboardingDone: true }),
+                            })
+                            if (r.ok) window.location.reload()
+                          }}
+                          className="ml-auto text-[hsl(var(--accent))] hover:underline"
+                        >
+                          Marcar como activo →
+                        </button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
