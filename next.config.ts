@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
     "pg-connection-string",
     "pgpass",
     "pg-native",
+    "googleapis",
+    "googleapis-common",
+    "gaxios",
+    "gcp-metadata",
+    "google-auth-library",
+    "https-proxy-agent",
+    "agent-base",
   ],
   images: {
     remotePatterns: [
