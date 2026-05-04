@@ -462,7 +462,7 @@ async function executeTool(
     case "execute_batch": {
       const title = toolInput.title as string
       const rawTasks = toolInput.tasks as Array<{ type: string; label: string; payload: Record<string, unknown> }>
-      const { randomUUID } = await import("crypto")
+      const { randomUUID } = await import("node:crypto")
       const batchId = randomUUID()
 
       const batchTasks: BatchTask[] = []

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "crypto"
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto"
 
 // =============================================================
 // Encriptación AES-256-GCM para datos sensibles en la DB
