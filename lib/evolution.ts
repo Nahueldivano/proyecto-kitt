@@ -244,9 +244,20 @@ export async function findContacts(tenantId: string): Promise<Map<string, string
     const map = new Map<string, string>()
     for (const c of contacts) {
       const jid = c.remoteJid ?? c.jid ?? c.id
-      const name = c.pushName ?? c.name ?? c.notify ?? c.verifiedName
-      if (jid && name && String(jid).includes("@")) {
-        map.set(String(jid), String(name))
+      if (!jid || !String(jid).includes("@")) continue
+      const jidStr = String(jid)
+
+      // Priorizar nombre de agenda (name/notify) sobre pushName (nombre propio del contacto)
+      const agendaName = c.name ?? c.notify ?? c.verifiedName
+      const name = agendaName ?? c.pushName
+      if (!name) continue
+
+      map.set(jidStr, String(name))
+
+      // Guardar también por número puro para matchear JIDs @lid o variantes
+      const phone = jidStr.replace(/@.+$/, "")
+      if (phone && !map.has(phone)) {
+        map.set(phone, String(name))
       }
     }
     return map
