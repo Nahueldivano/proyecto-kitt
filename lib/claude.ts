@@ -317,7 +317,7 @@ async function executeTool(
         SELECT
           "chatJid",
           (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName",
-          MAX("contactName") AS "contactName",
+          (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL))[1] AS "contactName",
           COUNT(*) AS "messageCount",
           (ARRAY_AGG("body" ORDER BY "timestamp" DESC))[1] AS "lastBody",
           MAX("timestamp") AS "lastTs",
@@ -354,7 +354,8 @@ async function executeTool(
       if (!chatInput.includes("@")) {
         // Buscar el JID por nombre o número parcial
         const found = await db.$queryRawUnsafe<Array<{ chatJid: string; contactName: string | null }>>(`
-          SELECT "chatJid", MAX("contactName") AS "contactName"
+          SELECT "chatJid",
+            (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL))[1] AS "contactName"
           FROM "WhatsappMessage"
           WHERE "tenantId" = $1
             AND ("chatJid" ILIKE $2 OR "contactName" ILIKE $2 OR "chatName" ILIKE $2)

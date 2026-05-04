@@ -25,6 +25,15 @@ export async function silentSync(tenantId: string): Promise<void> {
     ).catch(() => {})
   }
 
+  // Corregir contactName en chats 1:1 con nombre de agenda (evita que quede el nombre propio del tenant)
+  for (const [jid, agendaName] of contactsMap.entries()) {
+    if (jid.endsWith("@g.us") || jid.includes("@lid")) continue
+    await db.$executeRawUnsafe(
+      `UPDATE "WhatsappMessage" SET "contactName" = $1 WHERE "tenantId" = $2 AND "chatJid" = $3 AND ("contactName" IS NULL OR "contactName" != $1)`,
+      agendaName, tenantId, jid
+    ).catch(() => {})
+  }
+
   const allMessages = await findMessages(tenantId, { limit: 5000 })
   const recent = allMessages.filter((m) => m.timestamp >= since)
   const filtered = whitelist.length > 0

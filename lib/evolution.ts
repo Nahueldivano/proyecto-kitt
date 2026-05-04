@@ -318,9 +318,11 @@ export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
       if (!jid) return null
       const jidStr = String(jid)
       const ts = c.lastMessageTimestamp ?? c.updatedAt ?? 0
-      const rawName = c.name ?? c.pushName ?? c.subject ?? c.verifiedName ?? null
-      // Si no hay nombre desde el chat, usamos el del agenda
-      const name = rawName ?? contactsMap.get(jidStr) ?? null
+      const rawName = c.name ?? c.subject ?? c.verifiedName ?? null
+      // Para 1:1: preferir nombre de agenda; para grupos: usar subject/name del chat
+      const phone = jidStr.replace(/@.+$/, "")
+      const agendaName = contactsMap.get(jidStr) ?? contactsMap.get(phone) ?? null
+      const name = agendaName ?? rawName ?? c.pushName ?? null
       return {
         jid: jidStr,
         name,
