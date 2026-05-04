@@ -21,8 +21,13 @@ export async function GET() {
       }),
     ])
 
+    const cfg = (tenant?.config ?? {}) as Record<string, unknown>
+    // No enviar keys encriptadas al cliente — solo flags de presencia
+    const { anthropicApiKey, openaiApiKey, ...safeConfig } = cfg
     return NextResponse.json({
-      config: tenant?.config ?? {},
+      config: safeConfig,
+      hasAnthropicKey: !!anthropicApiKey,
+      hasOpenaiKey: !!openaiApiKey,
       gmailEmail: gmailConn?.email ?? null,
     })
   } catch (error) {
@@ -84,7 +89,13 @@ export async function POST(req: NextRequest) {
       data: { config: newConfig as Record<string, string | number | boolean | null> },
     })
 
-    return NextResponse.json({ success: true, config: newConfig })
+    const { anthropicApiKey: _ak, openaiApiKey: _ok, ...safeNewConfig } = newConfig
+    return NextResponse.json({
+      success: true,
+      config: safeNewConfig,
+      hasAnthropicKey: !!newConfig.anthropicApiKey,
+      hasOpenaiKey: !!newConfig.openaiApiKey,
+    })
   } catch (error) {
     console.error("[settings] POST error:", error)
     return NextResponse.json({ error: "Error interno" }, { status: 500 })

@@ -14,8 +14,6 @@ interface TenantConfig {
   assistantName?: string
   tone?: string
   model?: string
-  anthropicApiKey?: string
-  openaiApiKey?: string
   waMonitorPrompt?: string
   gmailMonitorPrompt?: string
 }
@@ -34,6 +32,8 @@ export default function SettingsPage() {
 
   const [tab, setTab] = useState<Tab>("perfil")
   const [config, setConfig] = useState<TenantConfig>({})
+  const [hasAnthropicKey, setHasAnthropicKey] = useState(false)
+  const [hasOpenaiKey, setHasOpenaiKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [gmailEmail, setGmailEmail] = useState<string | null>(null)
@@ -66,6 +66,8 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((d) => {
         setConfig(d.config ?? {})
+        setHasAnthropicKey(!!d.hasAnthropicKey)
+        setHasOpenaiKey(!!d.hasOpenaiKey)
         if (d.gmailEmail) setGmailEmail(d.gmailEmail)
         setWaPrompt(d.config?.waMonitorPrompt ?? "")
         setGmailPrompt(d.config?.gmailMonitorPrompt ?? "")
@@ -113,11 +115,14 @@ export default function SettingsPage() {
       const payload: Record<string, unknown> = { ...config, ...extra }
       if (apiKeyInput.trim()) payload.anthropicApiKey = apiKeyInput.trim()
       if (openaiKeyInput.trim()) payload.openaiApiKey = openaiKeyInput.trim()
-      await fetch("/api/settings", {
+      const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
+      const d = await res.json()
+      if (d.hasAnthropicKey !== undefined) setHasAnthropicKey(d.hasAnthropicKey)
+      if (d.hasOpenaiKey !== undefined) setHasOpenaiKey(d.hasOpenaiKey)
       setSaved(true)
       setApiKeyInput("")
       setOpenaiKeyInput("")
@@ -263,12 +268,19 @@ export default function SettingsPage() {
 
             <Section title="API Key de Anthropic">
               <p className="text-xs text-[hsl(var(--text-3))] mb-3">
-                Necesaria para que KITT funcione. Conseguila en console.anthropic.com
+                Necesaria para que KITT funcione. Conseguila en{" "}
+                <span className="text-[hsl(var(--accent))]">console.anthropic.com</span>
               </p>
+              {hasAnthropicKey && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md bg-green-500/10 border border-green-500/20">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-500 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span className="text-xs text-green-600 dark:text-green-400">API key configurada y guardada</span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   type={apiKeyVisible ? "text" : "password"}
-                  placeholder="sk-ant-..."
+                  placeholder={hasAnthropicKey ? "••••••••••••••••••••• (dejar vacío para mantener)" : "sk-ant-..."}
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
                 />
@@ -276,19 +288,26 @@ export default function SettingsPage() {
                   {apiKeyVisible ? "Ocultar" : "Ver"}
                 </Button>
               </div>
-              <p className="text-xs text-[hsl(var(--text-3))] mt-2">
-                {config.anthropicApiKey ? "API key guardada (encriptada)" : "Sin API key configurada"}
-              </p>
+              {!hasAnthropicKey && (
+                <p className="text-xs text-amber-500 mt-2">Sin API key configurada — KITT no puede responder sin esta key.</p>
+              )}
             </Section>
 
-            <Section title="API Key de OpenAI">
+            <Section title="API Key de OpenAI (Whisper)">
               <p className="text-xs text-[hsl(var(--text-3))] mb-3">
-                Opcional. Se usa para transcribir audios de WhatsApp con Whisper. Conseguila en platform.openai.com
+                Opcional. Se usa para transcribir audios de WhatsApp. Conseguila en{" "}
+                <span className="text-[hsl(var(--accent))]">platform.openai.com</span>
               </p>
+              {hasOpenaiKey && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md bg-green-500/10 border border-green-500/20">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-500 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span className="text-xs text-green-600 dark:text-green-400">API key configurada y guardada</span>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   type={openaiKeyVisible ? "text" : "password"}
-                  placeholder="sk-..."
+                  placeholder={hasOpenaiKey ? "••••••••••••••••••••• (dejar vacío para mantener)" : "sk-..."}
                   value={openaiKeyInput}
                   onChange={(e) => setOpenaiKeyInput(e.target.value)}
                 />
@@ -296,9 +315,6 @@ export default function SettingsPage() {
                   {openaiKeyVisible ? "Ocultar" : "Ver"}
                 </Button>
               </div>
-              <p className="text-xs text-[hsl(var(--text-3))] mt-2">
-                {config.openaiApiKey ? "API key guardada (encriptada)" : "Sin API key configurada"}
-              </p>
             </Section>
 
             <Button onClick={() => saveConfig()} loading={saving} className="w-full">

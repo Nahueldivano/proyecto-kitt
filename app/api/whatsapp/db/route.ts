@@ -24,9 +24,18 @@ interface MessageRow {
   metadata: Record<string, unknown>
 }
 
+// Normaliza un JID al "canonical JID" para agrupar variantes del mismo contacto.
+// Grupos (@g.us) quedan intactos. 1:1 se normalizan a <phone>@s.whatsapp.net.
+// @lid y @c.us se tratan igual que @s.whatsapp.net.
+function canonicalJid(jid: string): string {
+  if (jid.endsWith("@g.us")) return jid
+  const phone = jid.replace(/@.+$/, "")
+  return `${phone}@s.whatsapp.net`
+}
+
 // GET /api/whatsapp/db
-//   sin params → lista de chats agrupados (top 100 por última actividad)
-//   ?chatJid=XXX → mensajes de ese chat (orden ascendente, máx 500)
+//   sin params → lista de chats agrupados por número canónico (top 100 por actividad)
+//   ?chatJid=XXX → mensajes de ese chat (por número canónico, une variantes @s/@lid)
 //   ?q=texto → filtra mensajes por contenido (todos los chats)
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -40,14 +49,25 @@ export async function GET(req: NextRequest) {
 
   try {
     if (chatJid) {
+      // Agrupar variantes: para 1:1, buscar por número puro; para grupos, JID exacto
+      let whereClause: string
+      let params: unknown[]
+      if (chatJid.endsWith("@g.us")) {
+        whereClause = `"tenantId" = $1 AND "chatJid" = $2`
+        params = [tenantId, chatJid]
+      } else {
+        const phone = chatJid.replace(/@.+$/, "")
+        whereClause = `"tenantId" = $1 AND regexp_replace("chatJid", '@.+$', '') = $2`
+        params = [tenantId, phone]
+      }
+
       const messages = await db.$queryRawUnsafe<MessageRow[]>(
         `SELECT "id","externalId","chatJid","chatName","contactName","fromMe","body","messageType","timestamp","metadata"
          FROM "WhatsappMessage"
-         WHERE "tenantId" = $1 AND "chatJid" = $2
+         WHERE ${whereClause}
          ORDER BY "timestamp" ASC
          LIMIT 500`,
-        tenantId,
-        chatJid,
+        ...params,
       )
       return NextResponse.json({ messages })
     }
@@ -65,38 +85,45 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ messages })
     }
 
-    // Lista de chats agrupados
+    // Lista de chats agrupados por JID canónico (número puro para 1:1, JID para grupos)
+    // Esto unifica variantes @s.whatsapp.net, @lid, @c.us del mismo contacto
     const chats = await db.$queryRawUnsafe<ChatRow[]>(
-      `SELECT
-         "chatJid",
-         (SELECT "chatName" FROM "WhatsappMessage" m2
-          WHERE m2."tenantId" = m1."tenantId" AND m2."chatJid" = m1."chatJid"
-            AND m2."chatName" IS NOT NULL
-          ORDER BY m2."timestamp" DESC LIMIT 1) AS "chatName",
-         (SELECT "contactName" FROM "WhatsappMessage" m2
-          WHERE m2."tenantId" = m1."tenantId" AND m2."chatJid" = m1."chatJid"
-            AND m2."contactName" IS NOT NULL
-          ORDER BY m2."timestamp" DESC LIMIT 1) AS "contactName",
+      `WITH normalized AS (
+         SELECT *,
+           CASE
+             WHEN "chatJid" LIKE '%@g.us' THEN "chatJid"
+             ELSE regexp_replace("chatJid", '@.+$', '') || '@s.whatsapp.net'
+           END AS "canonicalJid"
+         FROM "WhatsappMessage"
+         WHERE "tenantId" = $1
+       )
+       SELECT
+         "canonicalJid" AS "chatJid",
+         (SELECT n2."chatName" FROM normalized n2
+          WHERE n2."canonicalJid" = n."canonicalJid"
+            AND n2."chatName" IS NOT NULL
+          ORDER BY n2."timestamp" DESC LIMIT 1) AS "chatName",
+         (SELECT n2."contactName" FROM normalized n2
+          WHERE n2."canonicalJid" = n."canonicalJid"
+            AND n2."contactName" IS NOT NULL
+          ORDER BY n2."timestamp" DESC LIMIT 1) AS "contactName",
          COUNT(*) AS "messageCount",
          MAX("timestamp") AS "lastMessageAt",
-         (SELECT "body" FROM "WhatsappMessage" m3
-          WHERE m3."tenantId" = m1."tenantId" AND m3."chatJid" = m1."chatJid"
-          ORDER BY m3."timestamp" DESC LIMIT 1) AS "lastMessageBody"
-       FROM "WhatsappMessage" m1
-       WHERE "tenantId" = $1
-       GROUP BY "chatJid", "tenantId"
+         (SELECT n3."body" FROM normalized n3
+          WHERE n3."canonicalJid" = n."canonicalJid"
+          ORDER BY n3."timestamp" DESC LIMIT 1) AS "lastMessageBody"
+       FROM normalized n
+       GROUP BY "canonicalJid"
        ORDER BY MAX("timestamp") DESC
        LIMIT 100`,
       tenantId,
     )
 
-    // Convertir BigInt a Number para serialización
     const serialized = chats.map((c) => ({
       ...c,
       messageCount: Number(c.messageCount),
     }))
 
-    // Estadísticas globales
     const stats = await db.$queryRawUnsafe<{ total: bigint | number; audios: bigint | number; pendingAudios: bigint | number }[]>(
       `SELECT
          COUNT(*)::bigint AS total,
