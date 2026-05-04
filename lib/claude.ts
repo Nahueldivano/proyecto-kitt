@@ -317,7 +317,10 @@ async function executeTool(
         SELECT
           "chatJid",
           (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName",
-          (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL))[1] AS "contactName",
+          COALESCE(
+            (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL AND "fromMe" = false))[1],
+            (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL AND "fromMe" = true))[1]
+          ) AS "contactName",
           COUNT(*) AS "messageCount",
           (ARRAY_AGG("body" ORDER BY "timestamp" DESC))[1] AS "lastBody",
           MAX("timestamp") AS "lastTs",

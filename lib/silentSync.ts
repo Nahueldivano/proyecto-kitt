@@ -25,13 +25,37 @@ export async function silentSync(tenantId: string): Promise<void> {
     ).catch(() => {})
   }
 
-  // Corregir contactName en chats 1:1 con nombre de agenda (evita que quede el nombre propio del tenant)
-  for (const [jid, agendaName] of contactsMap.entries()) {
-    if (jid.endsWith("@g.us") || jid.includes("@lid")) continue
-    await db.$executeRawUnsafe(
-      `UPDATE "WhatsappMessage" SET "contactName" = $1 WHERE "tenantId" = $2 AND "chatJid" = $3 AND ("contactName" IS NULL OR "contactName" != $1)`,
-      agendaName, tenantId, jid
-    ).catch(() => {})
+  // Corregir contactName en chats 1:1:
+  // - Si tenemos nombre de agenda: usarlo para TODOS los mensajes del chat
+  // - Si NO tenemos nombre de agenda: limpiar contactName de mensajes fromMe=true
+  //   (ese nombre es el del tenant, no el del contacto)
+  const allJids = await db.$queryRawUnsafe<Array<{ chatJid: string }>>(
+    `SELECT DISTINCT "chatJid" FROM "WhatsappMessage"
+     WHERE "tenantId" = $1 AND "chatJid" NOT LIKE '%@g.us'`,
+    tenantId
+  ).catch(() => [] as Array<{ chatJid: string }>)
+
+  for (const { chatJid } of allJids as Array<{ chatJid: string }>) {
+    const phone = chatJid.replace(/@.+$/, "")
+    const agendaName = contactsMap.get(chatJid) ?? contactsMap.get(phone) ?? null
+    if (agendaName) {
+      // Tenemos nombre de agenda → aplicar a todos los mensajes del chat
+      await db.$executeRawUnsafe(
+        `UPDATE "WhatsappMessage" SET "contactName" = $1
+         WHERE "tenantId" = $2 AND regexp_replace("chatJid", '@.+$', '') = $3
+           AND ("contactName" IS NULL OR "contactName" != $1)`,
+        agendaName, tenantId, phone
+      ).catch(() => {})
+    } else {
+      // Sin nombre de agenda → limpiar contactName de mensajes propios (fromMe=true)
+      // El nombre en esos mensajes es el del tenant, no del contacto
+      await db.$executeRawUnsafe(
+        `UPDATE "WhatsappMessage" SET "contactName" = NULL
+         WHERE "tenantId" = $1 AND regexp_replace("chatJid", '@.+$', '') = $2
+           AND "fromMe" = true AND "contactName" IS NOT NULL`,
+        tenantId, phone
+      ).catch(() => {})
+    }
   }
 
   const allMessages = await findMessages(tenantId, { limit: 5000 })

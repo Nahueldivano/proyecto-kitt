@@ -114,19 +114,35 @@ export async function POST(req: NextRequest) {
     } catch { /* ignorar errores individuales */ }
   }
 
-  // Corregir contactName en chats 1:1 donde quedó guardado el nombre propio
-  // (pushName del mensaje fromMe=true). Priorizar siempre el nombre de la agenda.
+  // Corregir contactName en chats 1:1:
+  // - Con nombre de agenda: aplicar a todos los mensajes del chat (por número, une variantes @lid)
+  // - Sin nombre de agenda: limpiar contactName de mensajes fromMe=true (ese nombre es el del tenant)
   let contactsFixed = 0
-  for (const [jid, agendaName] of contactsMap.entries()) {
-    if (jid.endsWith("@g.us")) continue
+  const allJids = await db.$queryRawUnsafe<Array<{ chatJid: string }>>(
+    `SELECT DISTINCT "chatJid" FROM "WhatsappMessage"
+     WHERE "tenantId" = $1 AND "chatJid" NOT LIKE '%@g.us'`,
+    tenantId
+  ).catch(() => [] as Array<{ chatJid: string }>)
+
+  for (const { chatJid } of allJids as Array<{ chatJid: string }>) {
+    const phone = chatJid.replace(/@.+$/, "")
+    const agendaName = contactsMap.get(chatJid) ?? contactsMap.get(phone) ?? null
     try {
-      const result = await db.$executeRawUnsafe(`
-        UPDATE "WhatsappMessage"
-        SET "contactName" = $1
-        WHERE "tenantId" = $2 AND "chatJid" = $3
-          AND ("contactName" IS NULL OR "contactName" != $1)
-      `, agendaName, tenantId, jid)
-      contactsFixed += Number(result)
+      if (agendaName) {
+        const result = await db.$executeRawUnsafe(`
+          UPDATE "WhatsappMessage" SET "contactName" = $1
+          WHERE "tenantId" = $2 AND regexp_replace("chatJid", '@.+$', '') = $3
+            AND ("contactName" IS NULL OR "contactName" != $1)
+        `, agendaName, tenantId, phone)
+        contactsFixed += Number(result)
+      } else {
+        // Sin agenda: NULL los mensajes propios para que no figure el nombre del tenant
+        await db.$executeRawUnsafe(`
+          UPDATE "WhatsappMessage" SET "contactName" = NULL
+          WHERE "tenantId" = $1 AND regexp_replace("chatJid", '@.+$', '') = $2
+            AND "fromMe" = true AND "contactName" IS NOT NULL
+        `, tenantId, phone)
+      }
     } catch { /* ignorar errores individuales */ }
   }
   if (retroUpdated > 0) diagnostics.push(`retroactive chatName update: ${retroUpdated} rows`)

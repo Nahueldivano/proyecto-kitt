@@ -103,10 +103,16 @@ export async function GET(req: NextRequest) {
           WHERE n2."canonicalJid" = n."canonicalJid"
             AND n2."chatName" IS NOT NULL
           ORDER BY n2."timestamp" DESC LIMIT 1) AS "chatName",
-         (SELECT n2."contactName" FROM normalized n2
-          WHERE n2."canonicalJid" = n."canonicalJid"
-            AND n2."contactName" IS NOT NULL
-          ORDER BY n2."timestamp" DESC LIMIT 1) AS "contactName",
+         COALESCE(
+           (SELECT n2."contactName" FROM normalized n2
+            WHERE n2."canonicalJid" = n."canonicalJid"
+              AND n2."contactName" IS NOT NULL AND n2."fromMe" = false
+            ORDER BY n2."timestamp" DESC LIMIT 1),
+           (SELECT n2."contactName" FROM normalized n2
+            WHERE n2."canonicalJid" = n."canonicalJid"
+              AND n2."contactName" IS NOT NULL AND n2."fromMe" = true
+            ORDER BY n2."timestamp" DESC LIMIT 1)
+         ) AS "contactName",
          COUNT(*) AS "messageCount",
          MAX("timestamp") AS "lastMessageAt",
          (SELECT n3."body" FROM normalized n3
