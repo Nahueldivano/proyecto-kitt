@@ -98,6 +98,7 @@ function WhatsAppPanel() {
   const [syncUseCustomRange, setSyncUseCustomRange] = useState(false)
   const [syncSince, setSyncSince] = useState("")
   const [syncUntil, setSyncUntil] = useState("")
+  const [whitelistCount, setWhitelistCount] = useState<number>(0)
 
   const loadChats = useCallback(async () => {
     setLoading(true)
@@ -110,7 +111,16 @@ function WhatsAppPanel() {
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { loadChats() }, [loadChats])
+  useEffect(() => {
+    loadChats()
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        const wl = d.config?.waContactWhitelist
+        setWhitelistCount(Array.isArray(wl) ? wl.length : 0)
+      })
+      .catch(() => {})
+  }, [loadChats])
 
   const loadMessages = useCallback(async (chat: ChatRow) => {
     setMessagesLoading(true)
@@ -271,6 +281,12 @@ function WhatsAppPanel() {
               </div>
             )}
           </div>
+
+          {whitelistCount > 0 && (
+            <p className="text-[10px] text-[hsl(var(--text-3))]">
+              Filtro activo: {whitelistCount} chat{whitelistCount !== 1 ? "s" : ""} seleccionado{whitelistCount !== 1 ? "s" : ""} en configuración
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button

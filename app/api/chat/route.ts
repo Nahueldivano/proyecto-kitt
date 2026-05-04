@@ -81,6 +81,14 @@ export async function POST(req: NextRequest) {
     }
     history.push({ role: "user", content: userContent })
 
+    // Sync fantasma: insertar mensajes nuevos de WA sin bloquear el chat
+    try {
+      const { silentSync } = await import("@/lib/silentSync")
+      await silentSync(tenantId)
+    } catch {
+      // silencioso — nunca bloquea el chat
+    }
+
     let finalMessage = ""
     let artifact: Artifact | undefined
     let pendingActionId: string | undefined

@@ -112,6 +112,8 @@ export function ChatInterface() {
                 setArtifact(data.artifact)
               } else if (data.type === "pending_action") {
                 patchLastMessage({ pendingActionId: data.pendingActionId, metadata: { actionType: data.actionType, actionPayload: data.actionPayload } })
+              } else if (data.type === "task_batch") {
+                patchLastMessage({ metadata: { batchId: data.batchId, batchTitle: data.title, batchTasks: data.tasks } })
               } else if (data.type === "done") {
                 if (data.conversationId && data.conversationId !== conversationId) setConversationId(data.conversationId)
                 if (!streamedTextRef.current) updateLastMessage("Procesé tu solicitud.")

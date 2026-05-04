@@ -1,5 +1,6 @@
 import type { ChatMessage } from "@/lib/store"
 import { ApprovalCard } from "./ApprovalCard"
+import { BatchApprovalCard } from "./BatchApprovalCard"
 import { formatRelativeDate } from "@/lib/utils"
 import { parseResponseWithArtifacts } from "@/lib/artifact-parser"
 import { ArtifactRenderer } from "@/components/artifacts/ArtifactRenderer"
@@ -30,7 +31,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const { text, artifacts } = parseResponseWithArtifacts(message.content)
 
   const pendingActionId = message.pendingActionId
-  const metadata = message.metadata as { actionType?: string; actionPayload?: Record<string, unknown> } | undefined
+  const metadata = message.metadata as {
+    actionType?: string
+    actionPayload?: Record<string, unknown>
+    batchId?: string
+    batchTitle?: string
+    batchTasks?: Array<{ id: string; label: string; type: string; status: "pending" }>
+  } | undefined
 
   return (
     <div className="flex gap-2.5">
@@ -51,8 +58,17 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <ArtifactRenderer key={art.id} artifact={art} />
         ))}
 
-        {/* Tarjeta de aprobación si hay acción pendiente */}
-        {pendingActionId && metadata?.actionType && (
+        {/* Lote de tareas pendientes */}
+        {metadata?.batchId && metadata.batchTasks && (
+          <BatchApprovalCard
+            batchId={metadata.batchId}
+            title={metadata.batchTitle ?? "Acciones pendientes"}
+            tasks={metadata.batchTasks}
+          />
+        )}
+
+        {/* Tarjeta de aprobación si hay acción pendiente (acción individual) */}
+        {!metadata?.batchId && pendingActionId && metadata?.actionType && (
           <ApprovalCard
             actionId={pendingActionId}
             type={metadata.actionType}

@@ -29,10 +29,18 @@ export interface ChatResult {
   conversationId: string
 }
 
+export interface BatchTask {
+  id: string
+  label: string
+  type: string
+  status: "pending"
+}
+
 export type StreamChunk =
   | { type: "text"; text: string }
   | { type: "artifact"; artifact: Artifact }
   | { type: "pending_action"; pendingActionId: string; actionType: string; actionPayload: Record<string, unknown> }
+  | { type: "task_batch"; batchId: string; title: string; tasks: BatchTask[] }
   | { type: "done"; conversationId: string }
 
 // =============================================================
@@ -153,6 +161,30 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "execute_batch",
+    description:
+      "Ejecuta múltiples acciones de envío (WhatsApp o email) que requieren aprobación del usuario en conjunto. Usalo cuando necesitás enviar el mismo o distintos mensajes a varios destinatarios.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: { type: "string", description: "Título del lote de tareas (ej: 'Enviar mensaje a 5 contactos')" },
+        tasks: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["send_whatsapp_message", "send_email", "reply_email"] },
+              label: { type: "string", description: "Descripción breve de esta tarea (ej: 'WhatsApp a Gian Perez')" },
+              payload: { type: "object" },
+            },
+            required: ["type", "label", "payload"],
+          },
+        },
+      },
+      required: ["title", "tasks"],
+    },
+  },
+  {
     name: "create_artifact",
     description:
       "Crea un artefacto visual: documento, página HTML, gráfico, o código. Se muestra en un panel lateral.",
@@ -189,6 +221,9 @@ interface ToolCallResult {
   actionType?: string
   actionPayload?: Record<string, unknown>
   artifact?: Artifact
+  batchId?: string
+  batchTitle?: string
+  batchTasks?: BatchTask[]
 }
 
 async function executeTool(
@@ -421,6 +456,34 @@ async function executeTool(
         pendingActionId: action.id,
         actionType: "send_whatsapp_message",
         actionPayload: payload,
+      }
+    }
+
+    case "execute_batch": {
+      const title = toolInput.title as string
+      const rawTasks = toolInput.tasks as Array<{ type: string; label: string; payload: Record<string, unknown> }>
+      const { randomUUID } = await import("crypto")
+      const batchId = randomUUID()
+
+      const batchTasks: BatchTask[] = []
+      for (const t of rawTasks) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const action = await db.pendingAction.create({
+          data: {
+            tenantId,
+            type: t.type,
+            payload: t.payload as any,
+            status: "pending",
+          },
+        })
+        batchTasks.push({ id: action.id, label: t.label, type: t.type, status: "pending" })
+      }
+
+      return {
+        toolResult: `Lote "${title}" creado con ${batchTasks.length} tareas. IDs: ${batchTasks.map((t) => t.id).join(", ")}. Esperando aprobación del usuario.`,
+        batchId,
+        batchTitle: title,
+        batchTasks,
       }
     }
 
@@ -689,6 +752,14 @@ export async function chatStream(
             pendingActionId: result.pendingActionId,
             actionType: result.actionType!,
             actionPayload: result.actionPayload!,
+          })
+        }
+        if (result.batchId) {
+          onChunk({
+            type: "task_batch",
+            batchId: result.batchId,
+            title: result.batchTitle!,
+            tasks: result.batchTasks!,
           })
         }
         if (result.artifact) {
