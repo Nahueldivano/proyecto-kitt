@@ -44,12 +44,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-[hsl(var(--background))] p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-[hsl(var(--background))] p-4 pt-safe">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="mb-8 text-center">
+        <div className="mb-6 text-center">
           <div className="flex justify-center mb-3">
-            <Image src="/kitt-logo.png" alt="KITT" width={120} height={97} className="object-contain" />
+            <Image src="/kitt-logo.png" alt="KITT" width={100} height={80} className="object-contain" />
           </div>
           <p className="text-sm text-[hsl(var(--text-3))]">
             Tu asistente empresarial de IA
