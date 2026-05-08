@@ -29,27 +29,45 @@ export function MessageList({ messages, isLoading, onSuggestion }: MessageListPr
     <div className="flex-1 overflow-y-auto px-4 py-4">
       <div className="max-w-3xl mx-auto space-y-4">
         {isEmpty && !isLoading ? (
-          /* Estado vacío — bienvenida + suggestions */
-          <div className="py-8 text-center space-y-6">
-            <div>
-              <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-[hsl(var(--accent-soft))] mb-4">
-                <span className="text-[hsl(var(--accent))] text-2xl font-bold">K</span>
-              </div>
-              <h2 className="text-lg font-semibold text-[hsl(var(--text))]">
-                Hola, soy KITT
-              </h2>
-              <p className="text-sm text-[hsl(var(--text-3))] mt-1">
-                Tu asistente empresarial. ¿En qué te puedo ayudar hoy?
-              </p>
+          /* Empty state estilo Claude: ícono decorativo + texto serif grande */
+          <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-2 select-none">
+            {/* Ícono decorativo — asterisco/flor como Claude pero con K de KITT */}
+            <div className="mb-6 relative">
+              {/* Ícono decorativo: rayos/asterisco en color acento */}
+              <svg
+                width="56" height="56"
+                viewBox="0 0 56 56"
+                fill="none"
+                className="text-[hsl(var(--accent))]"
+                aria-hidden="true"
+              >
+                <circle cx="28" cy="28" r="6" fill="currentColor" opacity="0.9"/>
+                <rect x="26" y="4" width="4" height="16" rx="2" fill="currentColor" opacity="0.7"/>
+                <rect x="26" y="36" width="4" height="16" rx="2" fill="currentColor" opacity="0.7"/>
+                <rect x="4" y="26" width="16" height="4" rx="2" fill="currentColor" opacity="0.7"/>
+                <rect x="36" y="26" width="16" height="4" rx="2" fill="currentColor" opacity="0.7"/>
+                <rect x="10.34" y="11.76" width="4" height="16" rx="2" fill="currentColor" opacity="0.5" transform="rotate(-45 10.34 11.76)"/>
+                <rect x="29.17" y="30.59" width="4" height="16" rx="2" fill="currentColor" opacity="0.5" transform="rotate(-45 29.17 30.59)"/>
+                <rect x="10.34" y="44.24" width="4" height="16" rx="2" fill="currentColor" opacity="0.5" transform="rotate(45 10.34 44.24)"/>
+                <rect x="29.17" y="25.41" width="4" height="16" rx="2" fill="currentColor" opacity="0.5" transform="rotate(45 29.17 25.41)"/>
+              </svg>
             </div>
 
-            {/* Suggestion chips */}
-            <div className="flex flex-wrap gap-2 justify-center">
+            {/* Texto principal: serif grande, como Claude */}
+            <h2 className="font-display text-[1.75rem] leading-tight font-bold text-[hsl(var(--text))] mb-2 max-w-[280px] md:text-3xl md:max-w-none">
+              ¿En qué te puedo ayudar?
+            </h2>
+            <p className="text-sm text-[hsl(var(--text-3))] mb-8">
+              Tu asistente empresarial
+            </p>
+
+            {/* Suggestion chips — en desktop se muestran, en mobile más compactos */}
+            <div className="flex flex-wrap gap-2 justify-center max-w-sm md:max-w-xl">
               {SUGGESTIONS.map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => onSuggestion(suggestion)}
-                  className="px-3 py-2 text-sm rounded-full border border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] transition-colors touch-manipulation text-left"
+                  className="px-3.5 py-2 text-sm rounded-full border border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] active:scale-95 transition-all touch-manipulation text-left"
                 >
                   {suggestion}
                 </button>

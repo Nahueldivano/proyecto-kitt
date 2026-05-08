@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -229,14 +229,107 @@ export default function SettingsPage() {
     { id: "memoria", label: "Memoria" },
   ]
 
+  // En mobile: si no hay tab seleccionado explícitamente, mostrar el menú de lista
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(true)
+
+  const MOBILE_MENU_GROUPS: Array<{ label?: string; items: Array<{ id: Tab; label: string; icon: React.ReactNode; badge?: string; badgeColor?: string }> }> = [
+    {
+      items: [
+        { id: "perfil" as Tab, label: "Perfil y API Keys", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, badge: !hasAnthropicKey ? "⚠" : undefined },
+      ]
+    },
+    {
+      label: "Conexiones",
+      items: [
+        { id: "conexiones" as Tab, label: "WhatsApp", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>, badge: waStatus === "connected" ? "✓" : undefined, badgeColor: "text-green-500" },
+        { id: "conexiones" as Tab, label: "Gmail", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>, badge: gmailEmail ? "✓" : undefined, badgeColor: "text-green-500" },
+      ]
+    },
+    {
+      label: "Asistente",
+      items: [
+        { id: "asistente" as Tab, label: "Configuración del asistente", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg> },
+        { id: "memoria" as Tab, label: "Memoria", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg> },
+      ]
+    },
+  ]
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto px-4 py-6 pb-8">
-        <h1 className="text-lg font-semibold text-[hsl(var(--text))] mb-1">Configuración</h1>
-        <p className="text-sm text-[hsl(var(--text-3))] mb-6">Personalizá KITT para tu negocio</p>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-[hsl(var(--border))]">
+        {/* ── MOBILE: menú de lista estilo Claude ── */}
+        {mobileMenuOpen ? (
+          <div className="md:hidden space-y-3">
+            {/* Header cuenta */}
+            <div className="bg-[hsl(var(--surface))] rounded-2xl px-4 py-3.5 mb-4 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-[hsl(var(--text))] truncate">{session?.user?.email}</p>
+              </div>
+            </div>
+
+            {MOBILE_MENU_GROUPS.map((group, gi) => (
+              <div key={gi} className="bg-[hsl(var(--surface))] rounded-2xl overflow-hidden">
+                {group.label && (
+                  <p className="px-4 pt-3 pb-1 text-xs font-semibold text-[hsl(var(--text-3))] uppercase tracking-wider">
+                    {group.label}
+                  </p>
+                )}
+                {group.items.map((item, ii) => (
+                  <button
+                    key={`${item.id}-${ii}`}
+                    onClick={() => { setTab(item.id); setMobileMenuOpen(false) }}
+                    className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left hover:bg-[hsl(var(--surface-2))] active:bg-[hsl(var(--surface-2))] transition-colors border-t border-[hsl(var(--border))] first:border-t-0"
+                  >
+                    <span className="text-[hsl(var(--text-3))] shrink-0">{item.icon}</span>
+                    <span className="flex-1 text-[15px] text-[hsl(var(--text))]">{item.label}</span>
+                    {item.badge && (
+                      <span className={`text-xs font-medium ${item.badgeColor ?? "text-amber-500"}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[hsl(var(--text-3))] shrink-0">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            ))}
+
+            {/* Cerrar sesión */}
+            <div className="bg-[hsl(var(--surface))] rounded-2xl overflow-hidden">
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="w-full flex items-center gap-3.5 px-4 py-3.5 text-left text-[hsl(var(--destructive))] hover:bg-[hsl(var(--surface-2))] active:bg-[hsl(var(--surface-2))] transition-colors"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                <span className="text-[15px]">Cerrar sesión</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Mobile: sub-pantalla de un tab — con botón volver */
+          <div className="md:hidden">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex items-center gap-2 text-[hsl(var(--accent))] text-sm mb-4"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              Configuración
+            </button>
+          </div>
+        )}
+
+        {/* ── DESKTOP: título + tabs ── */}
+        <div className="hidden md:block">
+          <h1 className="text-lg font-semibold text-[hsl(var(--text))] mb-1">Configuración</h1>
+          <p className="text-sm text-[hsl(var(--text-3))] mb-6">Personalizá KITT para tu negocio</p>
+        </div>
+
+        {/* Tabs — desktop siempre visible, mobile solo cuando hay tab seleccionado */}
+        <div className={`${mobileMenuOpen ? "hidden" : "flex"} md:flex gap-1 mb-6 border-b border-[hsl(var(--border))]`}>
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -251,6 +344,9 @@ export default function SettingsPage() {
             </button>
           ))}
         </div>
+
+        {/* Contenido de tabs — desktop siempre, mobile solo cuando menú está cerrado */}
+        <div className={mobileMenuOpen ? "hidden md:block" : "block"}>
 
         {/* ─── PERFIL ─── */}
         {tab === "perfil" && (
@@ -702,6 +798,7 @@ export default function SettingsPage() {
             </Section>
           </div>
         )}
+        </div>{/* cierre del div de contenido de tabs (mobile condicional) */}
       </div>
     </div>
   )

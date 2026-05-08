@@ -107,10 +107,21 @@ body {
   padding-right: max(1rem, env(safe-area-inset-right));
 }
 
-/* Espacio extra en mobile para el nav bottom fijo (56px aprox) */
+/* Ya no hay bottom nav — eliminado en favor del drawer lateral */
+/* .pb-mobile-nav se mantiene como no-op para no romper referencias */
 @media (max-width: 767px) {
-  .pb-mobile-nav {
-    padding-bottom: calc(56px + max(0px, env(safe-area-inset-bottom)));
+  .pb-mobile-nav { padding-bottom: 0; }
+}
+
+/* Fuente serif para el empty state del chat (estilo Claude) */
+.font-display {
+  font-family: Georgia, "Times New Roman", "Noto Serif", serif;
+}
+
+/* Active state táctil para botones en mobile */
+@media (hover: none) {
+  button:active, a:active, [role="button"]:active {
+    opacity: 0.7;
   }
 }
 
