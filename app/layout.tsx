@@ -21,6 +21,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? "http://localhost:3000"),
   title: "KITT — Asistente Empresarial IA",
   description: "Tu asistente empresarial de inteligencia artificial",
   manifest: "/manifest.json",

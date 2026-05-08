@@ -62,7 +62,8 @@ model WhatsappMessage {
   tenantId     String
   externalId   String?  // ID del mensaje en Evolution API (key.id)
   chatJid      String   // JID del contacto/grupo (ej: 5491157589161@s.whatsapp.net)
-  contactName  String?  // pushName del remitente
+  contactName  String?  // nombre del contacto (agenda o pushName)
+  chatName     String?  // nombre del grupo (para @g.us)
   fromMe       Boolean  @default(false)
   body         String   @db.Text
   messageType  String   @default("text") // text | image | audio | video | document | sticker | other
