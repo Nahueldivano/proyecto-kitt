@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     const allowedFields = [
       "assistantName",
       "tone",
+      "country",
       "model",
       "reportSchedules",
       "notifyViaWhatsapp",
@@ -58,6 +59,8 @@ export async function POST(req: NextRequest) {
       "trackedEntities",
       "waMonitorPrompt",
       "gmailMonitorPrompt",
+      "waHistoryDays",
+      "waContactWhitelist",
     ]
 
     const current = await db.tenant.findUnique({

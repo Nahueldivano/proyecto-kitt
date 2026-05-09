@@ -13,10 +13,35 @@ type Tab = "perfil" | "conexiones" | "asistente" | "onboarding" | "memoria"
 interface TenantConfig {
   assistantName?: string
   tone?: string
+  country?: string
   model?: string
   waMonitorPrompt?: string
   gmailMonitorPrompt?: string
 }
+
+const COUNTRIES = [
+  { code: "AR", label: "Argentina" },
+  { code: "BO", label: "Bolivia" },
+  { code: "CL", label: "Chile" },
+  { code: "CO", label: "Colombia" },
+  { code: "CR", label: "Costa Rica" },
+  { code: "CU", label: "Cuba" },
+  { code: "DO", label: "República Dominicana" },
+  { code: "EC", label: "Ecuador" },
+  { code: "ES", label: "España" },
+  { code: "GT", label: "Guatemala" },
+  { code: "HN", label: "Honduras" },
+  { code: "MX", label: "México" },
+  { code: "NI", label: "Nicaragua" },
+  { code: "PA", label: "Panamá" },
+  { code: "PE", label: "Perú" },
+  { code: "PR", label: "Puerto Rico" },
+  { code: "PY", label: "Paraguay" },
+  { code: "SV", label: "El Salvador" },
+  { code: "UY", label: "Uruguay" },
+  { code: "VE", label: "Venezuela" },
+  { code: "OTHER", label: "Otro / Internacional" },
+]
 
 interface MemoryStats {
   usagePercent: number
@@ -359,6 +384,22 @@ export default function SettingsPage() {
               <div className="space-y-1.5">
                 <Label>Email</Label>
                 <Input value={session?.user?.email ?? ""} disabled className="opacity-60" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>País</Label>
+                <select
+                  value={config.country ?? ""}
+                  onChange={(e) => setConfig((c) => ({ ...c, country: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[hsl(var(--border-2))] bg-[hsl(var(--background))] text-[hsl(var(--text))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--accent))] focus:border-[hsl(var(--accent))] transition-all"
+                >
+                  <option value="">Seleccioná tu país...</option>
+                  {COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-[hsl(var(--text-3))]">
+                  KITT adapta su forma de hablar según tu región.
+                </p>
               </div>
             </Section>
 
