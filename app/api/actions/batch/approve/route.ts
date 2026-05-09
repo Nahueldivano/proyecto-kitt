@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ results })
   } catch (error) {
-    console.error("[actions/batch/approve] error:", error)
-    return NextResponse.json({ error: "Error interno" }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error("[actions/batch/approve] error:", msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

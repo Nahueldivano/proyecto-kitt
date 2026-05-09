@@ -69,7 +69,8 @@ export async function POST(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("[actions/approve] error:", error)
-    return NextResponse.json({ error: "Error al ejecutar la acción" }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error("[actions/approve] error:", msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
