@@ -120,7 +120,8 @@ export async function sendTextMessage(
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Evolution sendTextMessage failed: ${err}`)
+    console.error(`[evolution] sendTextMessage failed — status:${res.status} number:${number} instance:${instanceName} body:${err}`)
+    throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }
 
