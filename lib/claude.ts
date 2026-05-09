@@ -81,7 +81,7 @@ function getThinkingPhrase(toolName: string): string {
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "list_unread_emails",
-    description: "Lista los emails no leídos de la casilla conectada del usuario",
+    description: "Lista los emails no leídos de la casilla de Gmail conectada. Devuelve ID, remitente, asunto, fecha y resumen de cada email. Usá el ID devuelto para leer el contenido completo con read_email.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -95,13 +95,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "read_email",
-    description: "Lee el contenido completo de un email por su ID",
+    description: "Lee el contenido completo de un email por su ID de Gmail. Usá el ID que devuelve list_unread_emails. Devuelve remitente, asunto, fecha y cuerpo completo.",
     input_schema: {
       type: "object" as const,
       properties: {
         message_id: {
           type: "string",
-          description: "ID del mensaje de Gmail",
+          description: "ID del mensaje de Gmail (obtenido de list_unread_emails)",
         },
       },
       required: ["message_id"],
@@ -109,8 +109,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "send_email",
-    description:
-      "Prepara un email para enviar. SIEMPRE requiere aprobación del usuario antes de enviarse.",
+    description: "Prepara un email para enviar — SIEMPRE queda pendiente de aprobación del usuario, nunca se envía automáticamente. El usuario verá un botón para aprobar o rechazar antes de que se envíe.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -123,14 +122,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "reply_email",
-    description:
-      "Prepara una respuesta a un email. SIEMPRE requiere aprobación del usuario antes de enviarse.",
+    description: "Prepara una respuesta a un email existente — SIEMPRE queda pendiente de aprobación del usuario. Requiere el thread_id del email original (devuelto por list_unread_emails).",
     input_schema: {
       type: "object" as const,
       properties: {
-        thread_id: { type: "string", description: "ID del hilo de Gmail" },
+        thread_id: { type: "string", description: "ID del hilo de Gmail (obtenido de list_unread_emails)" },
         to: { type: "string", description: "Email del destinatario" },
-        subject: { type: "string", description: "Asunto original del email" },
+        subject: { type: "string", description: "Asunto del email" },
         body: { type: "string", description: "Cuerpo de la respuesta" },
       },
       required: ["thread_id", "to", "subject", "body"],
@@ -138,53 +136,57 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "list_whatsapp_chats",
-    description: "Lista los chats de WhatsApp sincronizados: contactos y grupos con su último mensaje y cantidad de mensajes. Usalo primero para saber qué contactos hay disponibles.",
+    description: "Lista los chats de WhatsApp sincronizados con su actividad reciente. Usalo primero para descubrir qué contactos y grupos están disponibles y obtener sus JIDs antes de leer conversaciones. Muestra: nombre, JID completo, cantidad de mensajes y último mensaje. Usá days_back para ver solo chats activos en los últimos N días.",
     input_schema: {
       type: "object" as const,
       properties: {
-        limit: { type: "number", description: "Máximo de chats a listar (default 30)" },
+        limit: { type: "number", description: "Máximo de chats a listar (default 50)" },
+        days_back: { type: "number", description: "Solo mostrar chats con actividad en los últimos N días. Omitir para ver todos." },
       },
       required: [],
     },
   },
   {
     name: "read_whatsapp_chat",
-    description: "Lee los mensajes de un chat de WhatsApp específico (por JID o nombre de contacto). Devuelve la conversación completa en orden cronológico.",
+    description: "Lee los mensajes de un chat de WhatsApp (1:1 o grupo) en orden cronológico. Acepta el JID exacto (ej: 5491157589161@s.whatsapp.net) o el nombre/número del contacto para búsqueda automática. Usá days_back para traer todos los mensajes dentro del período relevante — si el usuario dice 'esta semana' usá 7, 'este mes' usá 30. Default: 7 días.",
     input_schema: {
       type: "object" as const,
       properties: {
         chat_jid: {
           type: "string",
-          description: "JID del chat (ej: 5491157589161@s.whatsapp.net) o número/nombre si no sabés el JID exacto",
+          description: "JID completo del chat (ej: 5491157589161@s.whatsapp.net) o nombre/número del contacto para búsqueda parcial",
         },
-        limit: { type: "number", description: "Últimos N mensajes a traer (default 50)" },
+        days_back: {
+          type: "number",
+          description: "Traer mensajes de los últimos N días (default 7). Ajustá según lo que pida el usuario.",
+        },
       },
       required: ["chat_jid"],
     },
   },
   {
     name: "search_whatsapp_messages",
-    description: "Busca mensajes de WhatsApp por texto o palabra clave en todos los chats sincronizados.",
+    description: "Busca mensajes de WhatsApp por palabra clave en todos los chats sincronizados. Útil para encontrar menciones de un tema, cliente o proyecto en todas las conversaciones. Combinalo con chat_jid para buscar dentro de un chat específico. Usá days_back para acotar la búsqueda a un período relevante.",
     input_schema: {
       type: "object" as const,
       properties: {
-        query: { type: "string", description: "Texto a buscar en los mensajes" },
+        query: { type: "string", description: "Texto o palabra clave a buscar (búsqueda parcial, sin distinción de mayúsculas)" },
         chat_jid: { type: "string", description: "Filtrar por JID de un chat específico (opcional)" },
-        limit: { type: "number", description: "Máximo de resultados (default 20)" },
+        days_back: { type: "number", description: "Solo buscar en mensajes de los últimos N días. Omitir para buscar en todo el historial." },
+        limit: { type: "number", description: "Máximo de resultados (default 100)" },
       },
       required: ["query"],
     },
   },
   {
     name: "send_whatsapp_message",
-    description:
-      "Prepara un mensaje de WhatsApp para enviar. SIEMPRE requiere aprobación del usuario antes de enviarse.",
+    description: "Prepara un mensaje de WhatsApp para enviar — SIEMPRE queda pendiente de aprobación del usuario, nunca se envía automáticamente. El campo 'to' debe ser el JID completo obtenido de list_whatsapp_chats.",
     input_schema: {
       type: "object" as const,
       properties: {
         to: {
           type: "string",
-          description: "Número de teléfono o ID del grupo de WhatsApp",
+          description: "JID completo del destinatario (ej: 5491157589161@s.whatsapp.net), obtenido de list_whatsapp_chats",
         },
         message: { type: "string", description: "Texto del mensaje" },
       },
@@ -193,19 +195,18 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "execute_batch",
-    description:
-      "Ejecuta múltiples acciones de envío (WhatsApp o email) que requieren aprobación del usuario en conjunto. Usalo cuando necesitás enviar el mismo o distintos mensajes a varios destinatarios.",
+    description: "Prepara múltiples acciones de envío (WhatsApp y/o email) para que el usuario las apruebe en bloque. Usalo cuando el usuario quiere enviar mensajes a varios destinatarios a la vez. Todas las acciones quedan pendientes de aprobación antes de ejecutarse.",
     input_schema: {
       type: "object" as const,
       properties: {
-        title: { type: "string", description: "Título del lote de tareas (ej: 'Enviar mensaje a 5 contactos')" },
+        title: { type: "string", description: "Título descriptivo del lote (ej: 'Aviso de reunión a 5 contactos')" },
         tasks: {
           type: "array",
           items: {
             type: "object",
             properties: {
               type: { type: "string", enum: ["send_whatsapp_message", "send_email", "reply_email"] },
-              label: { type: "string", description: "Descripción breve de esta tarea (ej: 'WhatsApp a Gian Perez')" },
+              label: { type: "string", description: "Descripción breve de esta tarea (ej: 'WhatsApp a Juan Pérez')" },
               payload: { type: "object" },
             },
             required: ["type", "label", "payload"],
@@ -217,24 +218,23 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "create_artifact",
-    description:
-      "Crea un artefacto visual: documento, página HTML, gráfico, o código. Se muestra en un panel lateral.",
+    description: "Crea contenido en el panel lateral: documento, HTML interactivo, gráfico o código. Usalo para cualquier entregable de más de ~15 líneas de contenido estructurado. El chat queda para la conversación; el artefacto para el entregable.",
     input_schema: {
       type: "object" as const,
       properties: {
         type: {
           type: "string",
           enum: ["document", "html", "chart", "code"],
-          description: "Tipo de artefacto",
+          description: "document: texto/markdown largo. html: dashboard/formulario/visualización interactiva. chart: gráfico. code: snippet de código.",
         },
         title: { type: "string", description: "Título del artefacto" },
         content: {
           type: "string",
-          description: "Contenido del artefacto (texto, HTML, código, etc.)",
+          description: "Contenido completo del artefacto",
         },
         language: {
           type: "string",
-          description: "Lenguaje de programación (solo para type=code)",
+          description: "Lenguaje de programación para type=code (typescript, python, sql, bash, etc.)",
         },
       },
       required: ["type", "title", "content"],
@@ -333,9 +333,13 @@ async function executeTool(
     }
 
     case "list_whatsapp_chats": {
-      const limit = (toolInput.limit as number) ?? 30
+      const limit = (toolInput.limit as number) ?? 50
+      const daysBack = toolInput.days_back as number | undefined
+      // Seguro: daysBack viene validado como number antes de interpolarse
+      const havingClause = daysBack
+        ? `HAVING MAX("timestamp") >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
+        : ""
 
-      // Traer chats agrupados: nombre, JID, cantidad de mensajes, último mensaje
       const rows = await db.$queryRawUnsafe<Array<{
         chatJid: string
         chatName: string | null
@@ -345,8 +349,17 @@ async function executeTool(
         lastTs: Date
         lastFromMe: boolean
       }>>(`
+        WITH normalized AS (
+          SELECT *,
+            CASE
+              WHEN "chatJid" LIKE '%@g.us' THEN "chatJid"
+              ELSE regexp_replace("chatJid", '@.+$', '') || '@s.whatsapp.net'
+            END AS "canonicalJid"
+          FROM "WhatsappMessage"
+          WHERE "tenantId" = $1
+        )
         SELECT
-          "chatJid",
+          "canonicalJid" AS "chatJid",
           (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName",
           COALESCE(
             (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL AND "fromMe" = false))[1],
@@ -356,9 +369,9 @@ async function executeTool(
           (ARRAY_AGG("body" ORDER BY "timestamp" DESC))[1] AS "lastBody",
           MAX("timestamp") AS "lastTs",
           (ARRAY_AGG("fromMe" ORDER BY "timestamp" DESC))[1] AS "lastFromMe"
-        FROM "WhatsappMessage"
-        WHERE "tenantId" = $1
-        GROUP BY "chatJid"
+        FROM normalized
+        GROUP BY "canonicalJid"
+        ${havingClause}
         ORDER BY MAX("timestamp") DESC
         LIMIT $2
       `, tenantId, limit)
@@ -376,30 +389,37 @@ async function executeTool(
         return `${i + 1}. ${name} [${r.chatJid}] — ${Number(r.messageCount)} msgs — ${ts}\n   ${dir} ${String(r.lastBody).substring(0, 80)}`
       }).join("\n\n")
 
-      return { toolResult: `Chats de WhatsApp sincronizados (${rows.length}):\n\n${formatted}` }
+      return { toolResult: `Chats de WhatsApp (${rows.length}):\n\n${formatted}` }
     }
 
     case "read_whatsapp_chat": {
       const chatInput = String(toolInput.chat_jid ?? "")
-      const limit = (toolInput.limit as number) ?? 50
+      const daysBack = (toolInput.days_back as number) ?? 7
 
-      // Buscar por JID exacto o por nombre/número parcial
+      // Resolver JID: si no tiene "@", buscar por nombre o número parcial
       let chatJid = chatInput
       if (!chatInput.includes("@")) {
-        // Buscar el JID por nombre o número parcial
-        const found = await db.$queryRawUnsafe<Array<{ chatJid: string; contactName: string | null }>>(`
-          SELECT "chatJid",
-            (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL))[1] AS "contactName"
+        const found = await db.$queryRawUnsafe<Array<{ chatJid: string }>>(`
+          SELECT "chatJid"
           FROM "WhatsappMessage"
           WHERE "tenantId" = $1
             AND ("chatJid" ILIKE $2 OR "contactName" ILIKE $2 OR "chatName" ILIKE $2)
           GROUP BY "chatJid"
+          ORDER BY MAX("timestamp") DESC
           LIMIT 1
         `, tenantId, `%${chatInput}%`)
         if (found.length > 0) {
           chatJid = found[0].chatJid
         }
       }
+
+      // Normalizar: unificar variantes @s.whatsapp.net y @lid del mismo número
+      const isGroup = chatJid.endsWith("@g.us")
+      const phone = chatJid.replace(/@.+$/, "")
+      // Seguro: daysBack viene validado como number antes de interpolarse
+      const jidCondition = isGroup
+        ? `"chatJid" = $2`
+        : `regexp_replace("chatJid", '@.+$', '') = $2`
 
       const messages = await db.$queryRawUnsafe<Array<{
         fromMe: boolean
@@ -411,18 +431,19 @@ async function executeTool(
       }>>(`
         SELECT "fromMe", "chatName", "contactName", "body", "messageType", "timestamp"
         FROM "WhatsappMessage"
-        WHERE "tenantId" = $1 AND "chatJid" = $2
-        ORDER BY "timestamp" DESC
-        LIMIT $3
-      `, tenantId, chatJid, limit)
+        WHERE "tenantId" = $1
+          AND ${jidCondition}
+          AND "timestamp" >= NOW() - INTERVAL '${Math.floor(daysBack)} days'
+        ORDER BY "timestamp" ASC
+        LIMIT 2000
+      `, tenantId, isGroup ? chatJid : phone)
 
       if (messages.length === 0) {
-        return { toolResult: `No se encontraron mensajes para "${chatInput}". Usá list_whatsapp_chats para ver los JIDs disponibles.` }
+        return { toolResult: `No se encontraron mensajes de "${chatInput}" en los últimos ${daysBack} días. Probá con un days_back mayor o usá list_whatsapp_chats para verificar el JID.` }
       }
 
       const chatLabel = messages.find(m => m.chatName)?.chatName ?? messages.find(m => m.contactName)?.contactName ?? chatJid
       const formatted = messages
-        .reverse()
         .map((m) => {
           const ts = m.timestamp.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
           if (m.fromMe) return `[${ts}] Yo: ${m.body}`
@@ -432,13 +453,18 @@ async function executeTool(
         })
         .join("\n")
 
-      return { toolResult: `Conversación con ${chatLabel} (${messages.length} mensajes):\n\n${formatted}` }
+      return { toolResult: `Conversación con ${chatLabel} — últimos ${daysBack} días (${messages.length} mensajes):\n\n${formatted}` }
     }
 
     case "search_whatsapp_messages": {
       const query = String(toolInput.query ?? "")
       const chatJidFilter = toolInput.chat_jid as string | undefined
-      const limit = (toolInput.limit as number) ?? 20
+      const daysBack = toolInput.days_back as number | undefined
+      const limit = (toolInput.limit as number) ?? 100
+      // Seguro: daysBack viene validado como number antes de interpolarse
+      const dateCondition = daysBack
+        ? `AND "timestamp" >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
+        : ""
 
       const messages = await db.$queryRawUnsafe<Array<{
         chatJid: string
@@ -452,21 +478,22 @@ async function executeTool(
         FROM "WhatsappMessage"
         WHERE "tenantId" = $1
           AND "body" ILIKE $2
-          AND ($4::text IS NULL OR "chatJid" = $4::text)
+          AND ($4::text IS NULL OR regexp_replace("chatJid", '@.+$', '') = regexp_replace($4::text, '@.+$', ''))
+          ${dateCondition}
         ORDER BY "timestamp" DESC
         LIMIT $3
       `, tenantId, `%${query}%`, limit, chatJidFilter ?? null)
 
       if (messages.length === 0) {
-        return { toolResult: `No se encontraron mensajes que contengan "${query}".` }
+        return { toolResult: `No se encontraron mensajes que contengan "${query}"${daysBack ? ` en los últimos ${daysBack} días` : ""}.` }
       }
 
       const formatted = messages.map((m) => {
         const ts = m.timestamp.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
-        if (m.fromMe) return `[${ts}] Yo: ${m.body.substring(0, 150)}`
+        if (m.fromMe) return `[${ts}] Yo: ${m.body.substring(0, 200)}`
         const sender = m.contactName ?? m.chatJid
         const groupSuffix = m.chatName ? ` (en ${m.chatName})` : ""
-        return `[${ts}] ${sender}${groupSuffix}: ${m.body.substring(0, 150)}`
+        return `[${ts}] ${sender}${groupSuffix}: ${m.body.substring(0, 200)}`
       }).join("\n")
 
       return { toolResult: `Mensajes con "${query}" (${messages.length} resultados):\n\n${formatted}` }
