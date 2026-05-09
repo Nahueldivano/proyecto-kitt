@@ -35,6 +35,7 @@ export interface BatchTask {
   label: string
   type: string
   status: "pending"
+  payload?: Record<string, unknown>
 }
 
 export type StreamChunk =
@@ -539,7 +540,7 @@ async function executeTool(
             status: "pending",
           },
         })
-        batchTasks.push({ id: action.id, label: t.label, type: t.type, status: "pending" })
+        batchTasks.push({ id: action.id, label: t.label, type: t.type, status: "pending", payload: t.payload })
       }
 
       return {

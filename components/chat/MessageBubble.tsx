@@ -81,7 +81,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     actionPayload?: Record<string, unknown>
     batchId?: string
     batchTitle?: string
-    batchTasks?: Array<{ id: string; label: string; type: string; status: "pending" }>
+    batchTasks?: Array<{ id: string; label: string; type: string; status: "pending"; payload?: Record<string, unknown> }>
     artifact?: Artifact
   } | undefined
 

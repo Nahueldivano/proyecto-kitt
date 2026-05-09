@@ -9,6 +9,7 @@ interface BatchTask {
   type: string
   status: "pending" | "approved" | "error"
   error?: string
+  payload?: Record<string, unknown>
 }
 
 interface BatchApprovalCardProps {
@@ -106,17 +107,32 @@ export function BatchApprovalCard({ batchId: _batchId, title, tasks: initialTask
       </div>
 
       {/* Task list */}
-      <div className="px-3 py-2 space-y-1.5">
-        {tasks.map((task) => (
-          <div key={task.id} className="flex items-center gap-2">
-            <TaskStatusIcon status={task.status} />
-            <span className="text-[hsl(var(--text-3))]">{getTypeIcon(task.type)}</span>
-            <span className="text-xs text-[hsl(var(--text-2))] flex-1 truncate">{task.label}</span>
-            {task.error && task.error !== "Rechazado" && (
-              <span className="text-[10px] text-[hsl(var(--destructive))] truncate max-w-[100px]">{task.error}</span>
-            )}
-          </div>
-        ))}
+      <div className="px-3 py-2 space-y-2">
+        {tasks.map((task) => {
+          // Extraer preview del mensaje del payload
+          const preview = task.payload
+            ? (task.payload.message ?? task.payload.body ?? task.payload.subject) as string | undefined
+            : undefined
+
+          return (
+            <div key={task.id} className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <TaskStatusIcon status={task.status} />
+                <span className="text-[hsl(var(--text-3))]">{getTypeIcon(task.type)}</span>
+                <span className="text-xs font-medium text-[hsl(var(--text-2))] flex-1 truncate">{task.label}</span>
+                {task.error && task.error !== "Rechazado" && (
+                  <span className="text-[10px] text-[hsl(var(--destructive))] truncate max-w-[120px]">{task.error}</span>
+                )}
+              </div>
+              {/* Preview del texto del mensaje */}
+              {preview && task.status !== "error" && (
+                <p className="text-[11px] text-[hsl(var(--text-3))] pl-[38px] leading-snug line-clamp-2 italic">
+                  "{String(preview).length > 120 ? String(preview).slice(0, 120) + "…" : preview}"
+                </p>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {/* Actions / summary */}
