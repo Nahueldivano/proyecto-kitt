@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useEffect } from "react"
+import { useCallback, useRef, useEffect, useState } from "react"
 import { useChatStore } from "@/lib/store"
 import { MessageList } from "./MessageList"
 import { ChatInput } from "./ChatInput"
@@ -17,6 +17,8 @@ export function ChatInterface() {
 
   const abortRef = useRef<AbortController | null>(null)
   const streamedTextRef = useRef("")
+  // Frase actual del estado "pensando" — null cuando ya está streameando texto
+  const [thinkingPhase, setThinkingPhase] = useState<string | null>(null)
 
   // Si hay un conversationId en el store, cargar mensajes al montar
   useEffect(() => {
@@ -38,7 +40,6 @@ export function ChatInterface() {
         })
         .catch(() => {})
     }
-  // Solo al montar o cambiar conversationId
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
 
@@ -54,6 +55,7 @@ export function ChatInterface() {
       }
       addMessage(userMsg)
       setLoading(true)
+      setThinkingPhase("Procesando tu mensaje...")
 
       addMessage({ id: `assistant-${Date.now()}`, role: "assistant", content: "", createdAt: new Date() })
       streamedTextRef.current = ""
@@ -61,7 +63,6 @@ export function ChatInterface() {
       const controller = new AbortController()
       abortRef.current = controller
 
-      // Archivos: imágenes como base64, texto como content
       const fileContents = attachedFiles.map((f) => ({
         name: f.name,
         type: f.type,
@@ -105,7 +106,12 @@ export function ChatInterface() {
             if (!part.startsWith("data: ")) continue
             try {
               const data = JSON.parse(part.slice(6))
-              if (data.type === "text") {
+              if (data.type === "thinking") {
+                // Actualizar la frase del indicador de pensando
+                setThinkingPhase(data.phase)
+              } else if (data.type === "text") {
+                // Primer texto — salir del modo thinking
+                setThinkingPhase(null)
                 streamedTextRef.current += data.text
                 updateLastMessage(streamedTextRef.current)
               } else if (data.type === "artifact") {
@@ -116,21 +122,25 @@ export function ChatInterface() {
               } else if (data.type === "task_batch") {
                 patchLastMessage({ metadata: { batchId: data.batchId, batchTitle: data.title, batchTasks: data.tasks } })
               } else if (data.type === "done") {
+                setThinkingPhase(null)
                 if (data.conversationId && data.conversationId !== conversationId) setConversationId(data.conversationId)
                 if (!streamedTextRef.current) updateLastMessage("Procesé tu solicitud.")
               } else if (data.type === "error") {
+                setThinkingPhase(null)
                 updateLastMessage(data.message ?? "Error al procesar tu mensaje.")
               }
             } catch { /* chunk malformado */ }
           }
         }
       } catch (err) {
+        setThinkingPhase(null)
         if ((err as Error).name === "AbortError") {
           if (!streamedTextRef.current) updateLastMessage("Respuesta cancelada.")
         } else {
           updateLastMessage("Tuve un problema procesando tu mensaje. Intentá de nuevo.")
         }
       } finally {
+        setThinkingPhase(null)
         setLoading(false)
         abortRef.current = null
       }
@@ -151,7 +161,12 @@ export function ChatInterface() {
   return (
     <div className="flex h-full">
       <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
-        <MessageList messages={messages} isLoading={isLoading} onSuggestion={handleSend} />
+        <MessageList
+          messages={messages}
+          isLoading={isLoading}
+          thinkingPhase={thinkingPhase}
+          onSuggestion={handleSend}
+        />
         <ChatInput
           onSend={handleSend}
           onCancel={handleCancel}

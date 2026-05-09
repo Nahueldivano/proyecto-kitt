@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 import type { ChatMessage } from "@/lib/store"
 import { MessageBubble } from "./MessageBubble"
+import { ThinkingIndicator } from "./ThinkingIndicator"
 
 const SUGGESTIONS = [
   "¿Qué emails tengo sin responder?",
@@ -14,16 +15,17 @@ const SUGGESTIONS = [
 interface MessageListProps {
   messages: ChatMessage[]
   isLoading?: boolean
+  thinkingPhase?: string | null
   onSuggestion: (text: string) => void
 }
 
-export function MessageList({ messages, isLoading, onSuggestion }: MessageListProps) {
+export function MessageList({ messages, isLoading, thinkingPhase, onSuggestion }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const isEmpty = messages.length === 0
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, isLoading])
+  }, [messages, isLoading, thinkingPhase])
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -81,10 +83,15 @@ export function MessageList({ messages, isLoading, onSuggestion }: MessageListPr
               <MessageBubble key={msg.id} message={msg} />
             ))}
 
-            {/* Indicador de carga */}
-            {isLoading && (
-              <div className="flex gap-2.5">
-                <div className="h-7 w-7 rounded-full bg-[hsl(var(--surface-2))] flex items-center justify-center flex-shrink-0 mt-1">
+            {/* Indicador de thinking — mientras KITT ejecuta tools */}
+            {isLoading && thinkingPhase && (
+              <ThinkingIndicator phase={thinkingPhase} />
+            )}
+
+            {/* Puntos simples — solo cuando está streameando texto (no hay thinkingPhase) */}
+            {isLoading && !thinkingPhase && messages[messages.length - 1]?.content === "" && (
+              <div className="flex gap-2.5 items-start">
+                <div className="h-7 w-7 rounded-full bg-[hsl(var(--surface-2))] flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-[hsl(var(--accent))] text-xs font-bold">K</span>
                 </div>
                 <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl rounded-tl-sm px-4 py-3">

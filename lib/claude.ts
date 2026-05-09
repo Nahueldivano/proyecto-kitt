@@ -38,10 +38,41 @@ export interface BatchTask {
 
 export type StreamChunk =
   | { type: "text"; text: string }
+  | { type: "thinking"; phase: string }
   | { type: "artifact"; artifact: Artifact }
   | { type: "pending_action"; pendingActionId: string; actionType: string; actionPayload: Record<string, unknown> }
   | { type: "task_batch"; batchId: string; title: string; tasks: BatchTask[] }
   | { type: "done"; conversationId: string }
+
+// Frases que se muestran mientras KITT ejecuta tools en silencio
+const THINKING_PHASES = [
+  "Analizando tu mensaje...",
+  "Revisando el contexto...",
+  "Procesando la información...",
+  "Consultando tus datos...",
+  "Preparando la respuesta...",
+  "Ejecutando acciones...",
+  "Verificando resultados...",
+  "Casi listo...",
+]
+
+// Devuelve una frase de "pensando" según la tool que se está ejecutando
+function getThinkingPhrase(toolName: string): string {
+  const phrases: Record<string, string> = {
+    list_unread_emails: "Revisando tus emails...",
+    read_email: "Leyendo el email...",
+    send_email: "Preparando el email...",
+    reply_email: "Redactando la respuesta...",
+    list_whatsapp_chats: "Revisando tus chats de WhatsApp...",
+    read_whatsapp_chat: "Leyendo la conversación...",
+    search_whatsapp_messages: "Buscando en tus mensajes...",
+    send_whatsapp_message: "Preparando el mensaje...",
+    execute_batch: "Procesando las tareas...",
+    create_artifact: "Generando el documento...",
+    web_search: "Buscando en la web...",
+  }
+  return phrases[toolName] ?? "Procesando..."
+}
 
 // =============================================================
 // Definición de tools
@@ -719,6 +750,11 @@ export async function chatStream(
 
       for (const block of response.content) {
         if (block.type !== "tool_use") continue
+
+        // Emitir fase de "pensando" con frase específica para la tool
+        if (!signal?.aborted) {
+          onChunk({ type: "thinking", phase: getThinkingPhrase(block.name) })
+        }
 
         const result = await executeTool(
           block.name,
