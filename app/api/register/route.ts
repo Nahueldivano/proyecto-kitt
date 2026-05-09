@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
           assistantName: "KITT",
           tone: "professional",
           model: "claude-opus-4-7",
+          country: "ES",
         },
       },
     })

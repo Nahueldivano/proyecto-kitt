@@ -9,6 +9,7 @@ import {
   replyToEmail,
 } from "@/lib/gmail"
 import { sendTextMessage } from "@/lib/evolution"
+import { getMemory, updateMemoryFromConversation, memoryToPromptBlock } from "@/lib/memory"
 import type { Artifact } from "@/lib/store"
 
 // =============================================================
@@ -762,7 +763,11 @@ export async function chatStream(
   }
 
   const client = new Anthropic({ apiKey })
-  const systemPrompt = buildSystemPrompt(assistantName, tone, country)
+
+  // Inyectar memoria del tenant en el system prompt
+  const memory = await getMemory(tenantId)
+  const memoryBlock = memoryToPromptBlock(memory)
+  const systemPrompt = buildSystemPrompt(assistantName, tone, country) + memoryBlock
 
   let currentMessages: Anthropic.MessageParam[] = messages.map((m) => ({
     role: m.role,
@@ -861,6 +866,12 @@ export async function chatStream(
   }
 
   onChunk({ type: "done", conversationId: convId })
+
+  // Actualizar memoria pasivamente después de la conversación (no bloquea)
+  const userMessages = messages.filter((m) => m.role === "user")
+  if (userMessages.length > 0) {
+    updateMemoryFromConversation(tenantId, apiKey, messages).catch(() => {})
+  }
 }
 
 // =============================================================

@@ -135,7 +135,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-[hsl(var(--text-3))]">
-          ¿No tenés cuenta?{" "}
+          ¿No tienes cuenta?{" "}
           <Link
             href="/register"
             className="text-[hsl(var(--accent))] hover:underline font-medium"

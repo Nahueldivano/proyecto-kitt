@@ -144,7 +144,7 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onInput={handleInput}
-            placeholder="Escribile a KITT..."
+            placeholder="Escríbele a KITT..."
             disabled={disabled}
             rows={1}
             className="w-full resize-none bg-transparent px-4 py-3.5 text-[15px] text-[hsl(var(--text))] placeholder:text-[hsl(var(--text-3))] outline-none max-h-40 min-h-[52px] leading-6 disabled:opacity-50"
@@ -198,7 +198,7 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onInput={handleInput}
-            placeholder="Preguntale algo a KITT..."
+            placeholder="Pregúntale algo a KITT..."
             disabled={disabled}
             rows={1}
             className="w-full resize-none bg-transparent px-4 pt-3 pb-12 text-sm text-[hsl(var(--text))] placeholder:text-[hsl(var(--text-3))] outline-none max-h-40 min-h-[52px] leading-6 disabled:opacity-50"

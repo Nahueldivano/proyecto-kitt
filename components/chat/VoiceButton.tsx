@@ -21,13 +21,13 @@ export function VoiceButton({ onTranscript, disabled }: VoiceButtonProps) {
     const SpeechRecognitionAPI = (window as any).webkitSpeechRecognition ?? (window as any).SpeechRecognition
 
     if (!SpeechRecognitionAPI) {
-      alert("Tu navegador no soporta reconocimiento de voz. Usá Chrome o Safari.")
+      alert("Tu navegador no soporta reconocimiento de voz. Usa Chrome o Safari.")
       return
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const recognition = new SpeechRecognitionAPI() as any
-    recognition.lang = "es-AR"
+    recognition.lang = "es-ES"
     recognition.interimResults = false
     recognition.maxAlternatives = 1
 
@@ -71,8 +71,8 @@ export function VoiceButton({ onTranscript, disabled }: VoiceButtonProps) {
           : "text-[hsl(var(--text-3))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))]",
         disabled && "opacity-40 pointer-events-none"
       )}
-      aria-label={isRecording ? "Grabando... soltá para terminar" : "Mantené presionado para hablar"}
-      title={isRecording ? "Grabando..." : "Mantené presionado para hablar"}
+      aria-label={isRecording ? "Grabando... suelta para terminar" : "Mantén presionado para hablar"}
+      title={isRecording ? "Grabando..." : "Mantén presionado para hablar"}
     >
       {isRecording ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

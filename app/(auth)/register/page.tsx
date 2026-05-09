@@ -162,7 +162,7 @@ export default function RegisterPage() {
         </form>
 
         <p className="mt-6 text-center text-sm text-[hsl(var(--text-3))]">
-          ¿Ya tenés cuenta?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Link
             href="/login"
             className="text-[hsl(var(--accent))] hover:underline font-medium"

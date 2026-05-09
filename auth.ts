@@ -80,6 +80,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   assistantName: "KITT",
                   tone: "professional",
                   model: "claude-opus-4-7",
+                  country: "ES",
                 },
               },
             })

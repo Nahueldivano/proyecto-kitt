@@ -1,16 +1,20 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ChatMessage } from "@/lib/store"
 import { MessageBubble } from "./MessageBubble"
 import { ThinkingIndicator } from "./ThinkingIndicator"
 
-const SUGGESTIONS = [
-  "¿Qué emails tengo sin responder?",
-  "Resumime los mensajes de WhatsApp de hoy",
-  "¿Hay algún tema urgente pendiente?",
-  "Mostrá el último reporte",
-]
+interface QuickAction {
+  label: string
+  prompt: string
+}
+
+interface GreetingData {
+  greeting: string
+  actions: QuickAction[]
+  memoryFacts: number
+}
 
 interface MessageListProps {
   messages: ChatMessage[]
@@ -22,6 +26,25 @@ interface MessageListProps {
 export function MessageList({ messages, isLoading, thinkingPhase, onSuggestion }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const isEmpty = messages.length === 0
+  const [greetingData, setGreetingData] = useState<GreetingData | null>(null)
+
+  // Cargar saludo dinámico solo cuando el chat está vacío
+  useEffect(() => {
+    if (!isEmpty) return
+    fetch("/api/chat/greeting")
+      .then((r) => r.json())
+      .then((d) => setGreetingData(d))
+      .catch(() => setGreetingData({
+        greeting: "Buenas, Juan",
+        actions: [
+          { label: "Emails pendientes", prompt: "¿Qué emails tengo sin responder?" },
+          { label: "WhatsApp de hoy", prompt: "Resúmeme los mensajes de WhatsApp de hoy" },
+          { label: "Temas urgentes", prompt: "¿Hay algún tema urgente pendiente?" },
+          { label: "Crear documento", prompt: "Crea un documento en blanco" },
+        ],
+        memoryFacts: 0,
+      }))
+  }, [isEmpty])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -31,18 +54,12 @@ export function MessageList({ messages, isLoading, thinkingPhase, onSuggestion }
     <div className="flex-1 overflow-y-auto px-4 py-4">
       <div className="max-w-3xl mx-auto space-y-4">
         {isEmpty && !isLoading ? (
-          /* Empty state estilo Claude: ícono decorativo + texto serif grande */
+          /* Empty state: saludo dinámico con nombre + hora + botones adaptativos */
           <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-2 select-none">
-            {/* Ícono decorativo — asterisco/flor como Claude pero con K de KITT */}
-            <div className="mb-6 relative">
-              {/* Ícono decorativo: rayos/asterisco en color acento */}
-              <svg
-                width="56" height="56"
-                viewBox="0 0 56 56"
-                fill="none"
-                className="text-[hsl(var(--accent))]"
-                aria-hidden="true"
-              >
+            {/* Ícono asterisco */}
+            <div className="mb-5">
+              <svg width="52" height="52" viewBox="0 0 56 56" fill="none"
+                className="text-[hsl(var(--accent))]" aria-hidden="true">
                 <circle cx="28" cy="28" r="6" fill="currentColor" opacity="0.9"/>
                 <rect x="26" y="4" width="4" height="16" rx="2" fill="currentColor" opacity="0.7"/>
                 <rect x="26" y="36" width="4" height="16" rx="2" fill="currentColor" opacity="0.7"/>
@@ -55,26 +72,39 @@ export function MessageList({ messages, isLoading, thinkingPhase, onSuggestion }
               </svg>
             </div>
 
-            {/* Texto principal: serif grande, como Claude */}
-            <h2 className="font-display text-[1.75rem] leading-tight font-bold text-[hsl(var(--text))] mb-2 max-w-[280px] md:text-3xl md:max-w-none">
-              ¿En qué te puedo ayudar?
-            </h2>
+            {/* Saludo personalizado con nombre y hora */}
+            {greetingData ? (
+              <h2 className="font-display text-[1.75rem] leading-tight font-bold text-[hsl(var(--text))] mb-2 max-w-[320px] md:text-3xl md:max-w-none">
+                {greetingData.greeting}
+              </h2>
+            ) : (
+              <div className="h-10 w-64 rounded-lg bg-[hsl(var(--surface-2))] animate-pulse mb-2" />
+            )}
+
             <p className="text-sm text-[hsl(var(--text-3))] mb-8">
-              Tu asistente empresarial
+              ¿En qué puedo ayudarte hoy?
             </p>
 
-            {/* Suggestion chips — en desktop se muestran, en mobile más compactos */}
-            <div className="flex flex-wrap gap-2 justify-center max-w-sm md:max-w-xl">
-              {SUGGESTIONS.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => onSuggestion(suggestion)}
-                  className="px-3.5 py-2 text-sm rounded-full border border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] active:scale-95 transition-all touch-manipulation text-left"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+            {/* Botones rápidos adaptativos */}
+            {greetingData ? (
+              <div className="flex flex-wrap gap-2 justify-center max-w-sm md:max-w-xl">
+                {greetingData.actions.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => onSuggestion(action.prompt)}
+                    className="px-3.5 py-2 text-sm rounded-full border border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] active:scale-95 transition-all touch-manipulation text-left"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2 justify-center max-w-sm">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-9 w-32 rounded-full bg-[hsl(var(--surface-2))] animate-pulse" />
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           /* Lista de mensajes */
@@ -88,7 +118,7 @@ export function MessageList({ messages, isLoading, thinkingPhase, onSuggestion }
               <ThinkingIndicator phase={thinkingPhase} />
             )}
 
-            {/* Puntos simples — solo cuando está streameando texto (no hay thinkingPhase) */}
+            {/* Puntos simples — cuando está streameando sin fase de thinking */}
             {isLoading && !thinkingPhase && messages[messages.length - 1]?.content === "" && (
               <div className="flex gap-2.5 items-start">
                 <div className="h-7 w-7 rounded-full bg-[hsl(var(--surface-2))] flex items-center justify-center flex-shrink-0 mt-0.5">
