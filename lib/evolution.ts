@@ -104,18 +104,23 @@ export async function sendTextMessage(
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
 
+  // Evolution sendText necesita el número puro sin sufijo @s.whatsapp.net/@lid.
+  // Si se le pasa el JID completo hace un check de existencia que falla con 400.
+  // Grupos (@g.us) sí necesitan el JID completo.
+  const number = to.endsWith("@g.us") ? to : to.replace(/@[^@]+$/, "")
+
   const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
     method: "POST",
     headers,
     body: JSON.stringify({
-      number: to,
+      number,
       text: message,
     }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — status:${res.status} to:${to} instance:${instanceName} body:${err}`)
+    console.error(`[evolution] sendTextMessage failed — status:${res.status} number:${number} instance:${instanceName} body:${err}`)
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }
