@@ -248,15 +248,22 @@ export async function findContacts(tenantId: string): Promise<Map<string, string
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contacts: any[] = Array.isArray(data) ? data : data?.contacts ?? data?.records ?? []
     const map = new Map<string, string>()
+    let withAgendaName = 0
+    let withPushNameOnly = 0
+
     for (const c of contacts) {
       const jid = c.remoteJid ?? c.jid ?? c.id
       if (!jid || !String(jid).includes("@")) continue
       const jidStr = String(jid)
 
-      // Priorizar nombre de agenda (name/notify) sobre pushName (nombre propio del contacto)
+      // c.name / c.notify = nombre que el usuario guardó en su agenda del teléfono
+      // c.pushName = nombre que el contacto se puso a sí mismo en WA
       const agendaName = c.name ?? c.notify ?? c.verifiedName
       const name = agendaName ?? c.pushName
       if (!name) continue
+
+      if (agendaName) withAgendaName++
+      else withPushNameOnly++
 
       map.set(jidStr, String(name))
 
@@ -266,6 +273,8 @@ export async function findContacts(tenantId: string): Promise<Map<string, string
         map.set(phone, String(name))
       }
     }
+
+    console.log(`[evolution] findContacts: ${map.size} contacts — ${withAgendaName} with agenda name, ${withPushNameOnly} pushName only`)
     return map
   } catch (err) {
     console.warn("[evolution] findContacts error:", err)
