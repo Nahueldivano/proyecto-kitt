@@ -4,6 +4,24 @@ import { db } from "@/lib/db"
 import { sendEmail, replyToEmail } from "@/lib/gmail"
 import { sendTextMessage } from "@/lib/evolution"
 
+// Convierte errores técnicos de Evolution/Gmail en mensajes legibles para el usuario
+function friendlyError(raw: string, type: string): string {
+  if (type === "send_whatsapp_message") {
+    if (raw.includes("exists\":false") || raw.includes("400")) {
+      return "No se pudo enviar el mensaje. El contacto no está disponible en WhatsApp o el número es incorrecto."
+    }
+    if (raw.includes("401") || raw.includes("403")) {
+      return "WhatsApp no está conectado. Reconectalo desde Configuración → Conexiones."
+    }
+  }
+  if (type.includes("email")) {
+    if (raw.includes("401") || raw.includes("invalid")) {
+      return "Gmail no está conectado. Reconectalo desde Configuración → Conexiones."
+    }
+  }
+  return "No se pudo ejecutar la acción. Intentalo de nuevo."
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -17,7 +35,6 @@ export async function POST(
     const { id } = await params
     const tenantId = session.user.tenantId
 
-    // Buscar la acción y verificar que pertenece al tenant
     const action = await db.pendingAction.findUnique({ where: { id } })
 
     if (!action) {
@@ -29,48 +46,34 @@ export async function POST(
     }
 
     if (action.status !== "pending") {
-      return NextResponse.json(
-        { error: "La acción ya fue procesada" },
-        { status: 409 }
-      )
+      return NextResponse.json({ error: "La acción ya fue procesada" }, { status: 409 })
     }
 
     const payload = action.payload as Record<string, string>
 
-    // Ejecutar la acción según su tipo
     switch (action.type) {
       case "send_email":
         await sendEmail(tenantId, payload.to, payload.subject, payload.body)
         break
-
       case "reply_email":
-        await replyToEmail(
-          tenantId,
-          payload.threadId,
-          payload.to,
-          payload.subject,
-          payload.body
-        )
+        await replyToEmail(tenantId, payload.threadId, payload.to, payload.subject, payload.body)
         break
-
       case "send_whatsapp_message":
         await sendTextMessage(tenantId, payload.to, payload.message)
         break
-
       default:
         return NextResponse.json({ error: "Tipo de acción desconocido" }, { status: 400 })
     }
 
-    // Marcar como aprobada
-    await db.pendingAction.update({
-      where: { id },
-      data: { status: "approved" },
-    })
-
+    await db.pendingAction.update({ where: { id }, data: { status: "approved" } })
     return NextResponse.json({ success: true })
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error)
-    console.error("[actions/approve] error:", msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    const raw = error instanceof Error ? error.message : String(error)
+    console.error("[actions/approve] error:", raw)
+    const action = await db.pendingAction.findUnique({
+      where: { id: (await params).id },
+      select: { type: true },
+    }).catch(() => null)
+    return NextResponse.json({ error: friendlyError(raw, action?.type ?? "") }, { status: 500 })
   }
 }

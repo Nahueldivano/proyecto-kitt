@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     const results: { id: string; status: "approved" | "error"; error?: string }[] = []
 
     for (const id of taskIds) {
+      let actionType = ""
       try {
         const action = await db.pendingAction.findUnique({ where: { id } })
         if (!action || action.tenantId !== tenantId) {
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
           continue
         }
 
+        actionType = action.type
         const payload = action.payload as Record<string, string>
 
         switch (action.type) {
@@ -51,8 +53,18 @@ export async function POST(req: NextRequest) {
         await db.pendingAction.update({ where: { id }, data: { status: "approved" } })
         results.push({ id, status: "approved" })
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Error desconocido"
-        results.push({ id, status: "error", error: msg })
+        const raw = err instanceof Error ? err.message : "Error desconocido"
+        console.error(`[actions/batch/approve] ${id}:`, raw)
+        // Mensaje legible según tipo de error
+        let userMsg = "No se pudo enviar. Intentalo de nuevo."
+        if (actionType === "send_whatsapp_message") {
+          if (raw.includes("exists\":false") || raw.includes("400")) {
+            userMsg = "Contacto no disponible en WhatsApp."
+          } else if (raw.includes("401") || raw.includes("403")) {
+            userMsg = "WhatsApp desconectado."
+          }
+        }
+        results.push({ id, status: "error", error: userMsg })
         await db.pendingAction.update({ where: { id }, data: { status: "rejected" } }).catch(() => {})
       }
     }
