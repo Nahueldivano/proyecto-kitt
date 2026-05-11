@@ -104,23 +104,45 @@ export async function sendTextMessage(
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
 
-  // Evolution sendText necesita el número puro sin sufijo @s.whatsapp.net/@lid.
-  // Si se le pasa el JID completo hace un check de existencia que falla con 400.
-  // Grupos (@g.us) sí necesitan el JID completo.
-  const number = to.endsWith("@g.us") ? to : to.replace(/@[^@]+$/, "")
+  // Para grupos @g.us: pasar el JID completo
+  // Para 1:1: Evolution necesita el número puro (sin @suffix).
+  // Intentamos primero con número puro; si falla con 400/exists:false,
+  // intentamos con el JID completo como fallback.
+  const isGroup = to.endsWith("@g.us")
+  const numberPure = isGroup ? to : to.replace(/@[^@]+$/, "")
 
-  const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      number,
-      text: message,
-    }),
-  })
+  console.log(`[evolution] sendTextMessage — original_to:${to} number:${numberPure} instance:${instanceName}`)
+
+  async function trySend(number: string): Promise<Response> {
+    return fetch(`${baseUrl}/message/sendText/${instanceName}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ number, text: message }),
+    })
+  }
+
+  let res = await trySend(numberPure)
+
+  // Si falla con "exists:false" y no es grupo, intentar con el JID completo como fallback
+  if (!res.ok && !isGroup) {
+    const errBody = await res.text()
+    if (errBody.includes("exists") || res.status === 400) {
+      console.warn(`[evolution] retry with full JID — original:${numberPure} fallback:${to}`)
+      res = await trySend(to)
+      if (!res.ok) {
+        const err2 = await res.text()
+        console.error(`[evolution] both formats failed — pure:${numberPure} jid:${to} err:${err2}`)
+        throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err2}`)
+      }
+      return
+    }
+    console.error(`[evolution] sendTextMessage failed — number:${numberPure} status:${res.status} body:${errBody}`)
+    throw new Error(`Evolution sendTextMessage failed (${res.status}): ${errBody}`)
+  }
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — status:${res.status} number:${number} instance:${instanceName} body:${err}`)
+    console.error(`[evolution] sendTextMessage failed — number:${numberPure} status:${res.status} body:${err}`)
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }
