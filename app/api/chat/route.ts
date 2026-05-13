@@ -81,6 +81,68 @@ export async function POST(req: NextRequest) {
     }
     history.push({ role: "user", content: userContent })
 
+    // Detección de confirmación conversacional: si el usuario dice "sí/dale/ok/enviar"
+    // y hay acciones pendientes del último mensaje del asistente, ejecutarlas directamente.
+    if (conversationId) {
+      const confirmWords = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo)?|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda)\b/i
+      if (confirmWords.test(message.trim())) {
+        const lastAssistant = await db.message.findFirst({
+          where: { conversationId, role: "assistant" },
+          orderBy: { createdAt: "desc" },
+          select: { metadata: true },
+        })
+        const meta = (lastAssistant?.metadata ?? {}) as Record<string, unknown>
+        const pendingIds: string[] = []
+
+        if (meta.pendingActionId) pendingIds.push(String(meta.pendingActionId))
+        if (meta.batchTasks && Array.isArray(meta.batchTasks)) {
+          for (const t of meta.batchTasks as Array<{ id: string }>) {
+            if (t.id) pendingIds.push(t.id)
+          }
+        }
+
+        if (pendingIds.length > 0) {
+          // Ejecutar las acciones pendientes
+          const { sendEmail, replyToEmail } = await import("@/lib/gmail")
+          const { sendTextMessage } = await import("@/lib/evolution")
+          const results: string[] = []
+
+          for (const id of pendingIds) {
+            try {
+              const action = await db.pendingAction.findUnique({ where: { id } })
+              if (!action || action.tenantId !== tenantId || action.status !== "pending") continue
+              const p = action.payload as Record<string, string>
+              if (action.type === "send_whatsapp_message") await sendTextMessage(tenantId, p.to, p.message)
+              else if (action.type === "send_email") await sendEmail(tenantId, p.to, p.subject, p.body)
+              else if (action.type === "reply_email") await replyToEmail(tenantId, p.threadId, p.to, p.subject, p.body)
+              await db.pendingAction.update({ where: { id }, data: { status: "approved" } })
+              results.push("ok")
+            } catch {
+              results.push("error")
+            }
+          }
+
+          const sent = results.filter((r) => r === "ok").length
+          const failed = results.filter((r) => r === "error").length
+          const replyText = failed === 0
+            ? `Listo, ${sent === 1 ? "mensaje enviado" : `${sent} mensajes enviados`}.`
+            : `${sent} enviado${sent !== 1 ? "s" : ""}, ${failed} no se pudo${failed !== 1 ? "n" : ""} enviar.`
+
+          const encoder2 = new TextEncoder()
+          const quickStream = new ReadableStream({
+            start(ctrl) {
+              ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "text", text: replyText })}\n\n`))
+              ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "done", conversationId })}\n\n`))
+              ctrl.close()
+            }
+          })
+          return new Response(quickStream, {
+            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" },
+          })
+        }
+      }
+    }
+
     // Sync fantasma: insertar mensajes nuevos de WA sin bloquear el chat
     try {
       const { silentSync } = await import("@/lib/silentSync")

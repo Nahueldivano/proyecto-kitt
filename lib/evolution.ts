@@ -118,8 +118,12 @@ async function resolveWhatsAppNumber(
     const entry = data[0]
     // Evolution devuelve { exists: true, jid: "549...@s.whatsapp.net" } o similar
     if (!entry.exists && !entry.jid) return null
+    // Devolver el JID completo tal cual lo da Evolution — NO quitar el @suffix
     const jid = entry.jid ?? entry.remoteJid ?? entry.number
-    return jid ? String(jid).replace(/@[^@]+$/, "") : null
+    if (!jid) return null
+    const jidStr = String(jid)
+    // Si ya tiene @, devolverlo tal cual. Si es solo número, agregar @s.whatsapp.net
+    return jidStr.includes("@") ? jidStr : `${jidStr}@s.whatsapp.net`
   } catch {
     return null
   }
@@ -147,15 +151,17 @@ export async function sendTextMessage(
     return
   }
 
-  // Contacto 1:1: resolver el número real vía checkNumberStatus
+  // Contacto 1:1: resolver el JID real vía whatsappNumbers
   const numberPure = to.replace(/@[^@]+$/, "")
-  console.log(`[evolution] sendTextMessage 1:1 — original_to:${to} phone:${numberPure}`)
+  // Fallback: si no tiene @, agregar @s.whatsapp.net para que Evolution lo acepte
+  const jidFallback = to.includes("@") ? to : `${to}@s.whatsapp.net`
+  console.log(`[evolution] sendTextMessage 1:1 — original_to:${to} fallback:${jidFallback}`)
 
-  // Paso 1: verificar con Evolution cuál es el JID real del número
-  const resolvedNumber = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
-  const numberToSend = resolvedNumber ?? numberPure
+  // Preguntar a Evolution cuál es el JID verificado para este número
+  const resolvedJid = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
+  const numberToSend = resolvedJid ?? jidFallback
 
-  console.log(`[evolution] resolved number: ${numberToSend}`)
+  console.log(`[evolution] resolved: ${numberToSend}`)
 
   const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
     method: "POST",
