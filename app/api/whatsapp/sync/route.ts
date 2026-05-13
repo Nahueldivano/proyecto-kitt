@@ -288,12 +288,53 @@ export async function POST(req: NextRequest) {
       diagnostics.push(`transcribed: ${totalTranscribed}, errors: ${transcribeErrors}`)
     }
 
+    // FASE 3: crear contactos para TODOS los chats en DB que no tengan entrada en Contact
+    // Esto garantiza que sync → contactos siempre funcione
+    let contactsCreated = 0
+    try {
+      const allChatsInDb = await db.$queryRawUnsafe<Array<{
+        chatJid: string
+        contactName: string | null
+        chatName: string | null
+      }>>(`
+        SELECT
+          CASE
+            WHEN "chatJid" LIKE '%@g.us' THEN "chatJid"
+            ELSE regexp_replace("chatJid", '@.+$', '') || '@s.whatsapp.net'
+          END AS "chatJid",
+          (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL AND "fromMe" = false))[1] AS "contactName",
+          (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName"
+        FROM "WhatsappMessage"
+        WHERE "tenantId" = $1
+        GROUP BY "chatJid"
+      `, tenantId)
+
+      for (const row of allChatsInDb) {
+        if (!row.chatJid?.includes("@")) continue
+        try {
+          const isGroup = row.chatJid.endsWith("@g.us")
+          const phone = isGroup ? null : row.chatJid.replace(/@.+$/, "")
+          const bestName = row.chatName ?? row.contactName ?? (phone ?? row.chatJid)
+          await db.contact.upsert({
+            where: { tenantId_chatJid: { tenantId, chatJid: row.chatJid } },
+            update: {}, // nunca sobreescribir nombre editado por usuario
+            create: { tenantId, chatJid: row.chatJid, name: bestName, phone, isGroup, tags: [], syncEnabled: true },
+          })
+          contactsCreated++
+        } catch { /* ignorar errores individuales */ }
+      }
+      diagnostics.push(`contacts upserted: ${contactsCreated}`)
+    } catch (e) {
+      diagnostics.push(`contacts phase error: ${e}`)
+    }
+
     return NextResponse.json({
       ok: true,
       chatsProcessed: byChatJid.size,
       messagesSaved: totalSaved,
       messagesSkipped: totalSkipped,
       audiosTranscribed: totalTranscribed,
+      contactsCreated,
       insertErrors: insertErrors.slice(0, 5),
       since: since.toISOString(),
       until: until.toISOString(),

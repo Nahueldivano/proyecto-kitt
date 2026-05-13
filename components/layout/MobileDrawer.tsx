@@ -31,11 +31,14 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: "/history",
-    label: "Historial",
+    href: "/contacts",
+    label: "Contactos",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
     ),
   },
@@ -49,14 +52,12 @@ const NAV_ITEMS = [
     ),
   },
   {
-    href: "/contacts",
-    label: "Contactos",
+    href: "/whatsapp-db?channel=gmail",
+    label: "Email",
     icon: (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+        <polyline points="22,6 12,13 2,6"/>
       </svg>
     ),
   },
@@ -181,7 +182,8 @@ export function MobileDrawer({ open, onClose, waConnected = false, gmailConnecte
           {/* Nav principal */}
           <nav className="space-y-0.5 mb-4">
             {NAV_ITEMS.map((item) => {
-              const active = pathname.startsWith(item.href)
+              const activePath = item.href.split("?")[0]
+              const active = pathname.startsWith(activePath)
               return (
                 <Link
                   key={item.href}
@@ -199,12 +201,12 @@ export function MobileDrawer({ open, onClose, waConnected = false, gmailConnecte
                   </span>
                   <span className="text-base">{item.label}</span>
 
-                  {/* Badges de estado para integraciones */}
+                  {/* Badges de estado */}
                   {item.href === "/whatsapp-db" && (
-                    <span className={cn(
-                      "ml-auto h-2 w-2 rounded-full",
-                      waConnected ? "bg-green-500" : "bg-[hsl(var(--border-2))]"
-                    )} />
+                    <span className={cn("ml-auto h-2 w-2 rounded-full", waConnected ? "bg-green-500" : "bg-[hsl(var(--border-2))]")} />
+                  )}
+                  {item.href.includes("gmail") && (
+                    <span className={cn("ml-auto h-2 w-2 rounded-full", gmailConnected ? "bg-green-500" : "bg-[hsl(var(--border-2))]")} />
                   )}
                 </Link>
               )

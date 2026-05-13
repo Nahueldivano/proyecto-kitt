@@ -62,6 +62,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
+  const [loadingConvs, setLoadingConvs] = useState(true)
   const [waLive, setWaLive] = useState<boolean>(waConnected)
   const [gmailLive, setGmailLive] = useState<boolean>(gmailConnected)
   const [collapsed, setCollapsed] = useState(false)
@@ -74,6 +75,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
   const menuRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(async () => {
+    setLoadingConvs(true)
     const [cRes, fRes] = await Promise.all([
       fetch("/api/conversations"),
       fetch("/api/folders"),
@@ -86,6 +88,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
       const d = await fRes.json()
       setFolders(d.folders ?? [])
     }
+    setLoadingConvs(false)
   }, [])
 
   useEffect(() => {
@@ -251,21 +254,26 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
         <nav className="px-2 py-1 space-y-0.5">
           {[
             { href: "/chat", label: "Chat", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+            { href: "/contacts", label: "Contactos", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
             { href: "/whatsapp-db", label: "WhatsApp", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
               badge: waLive, badgeColor: "bg-green-500" },
-            { href: "/contacts", label: "Contactos", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-          ].map(item => (
+            { href: "/whatsapp-db?channel=gmail", label: "Email", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+              badge: gmailLive, badgeColor: "bg-green-500" },
+          ].map(item => {
+            const activePath = item.href.split("?")[0]
+            const isActive = pathname.startsWith(activePath)
+            return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
-                pathname.startsWith(item.href)
+                isActive
                   ? "bg-[hsl(var(--surface))] text-[hsl(var(--text))] font-medium"
                   : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--text))]"
               )}
             >
-              <span className={pathname.startsWith(item.href) ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--text-3))]"}>
+              <span className={isActive ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--text-3))]"}>
                 {item.icon}
               </span>
               <span className="flex-1">{item.label}</span>
@@ -273,7 +281,8 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
                 <span className={`h-1.5 w-1.5 rounded-full ${item.badgeColor}`} />
               )}
             </Link>
-          ))}
+            )
+          })}
         </nav>
 
         <div className="mx-4 my-2 border-t border-[hsl(var(--border))]" />
@@ -350,7 +359,16 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
             </div>
           ))}
 
-          {conversations.length === 0 && (
+          {loadingConvs && (
+            <div className="px-2 space-y-1 pt-1">
+              {[80, 65, 90, 55, 70].map((w, i) => (
+                <div key={i} className="flex items-center gap-2 px-2 py-1.5">
+                  <div className={`skeleton h-3 rounded`} style={{ width: `${w}%` }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {!loadingConvs && conversations.length === 0 && (
             <p className="px-3 py-6 text-xs text-[hsl(var(--text-3))] text-center">Sin conversaciones aún</p>
           )}
         </div>
