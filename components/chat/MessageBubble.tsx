@@ -41,7 +41,7 @@ function ArtifactChip({ artifact }: { artifact: Artifact }) {
   return (
     <button
       onClick={() => setArtifact(artifact)}
-      className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[hsl(var(--border-2))] bg-[hsl(var(--surface-2))] hover:bg-[hsl(var(--surface))] hover:border-[hsl(var(--accent))] transition-colors text-left group"
+      className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[hsl(var(--border-2))] bg-[hsl(var(--surface-2))] hover:bg-[hsl(var(--surface))] active:bg-[hsl(var(--surface))] hover:border-[hsl(var(--accent))] active:border-[hsl(var(--accent))] transition-colors text-left group touch-manipulation"
     >
       <span className="text-[hsl(var(--accent))]">{typeIcon[artifact.type]}</span>
       <span className="text-xs text-[hsl(var(--text-2))] group-hover:text-[hsl(var(--text))] truncate max-w-[200px]">

@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation"
 import { useChatStore } from "@/lib/store"
-import { cn } from "@/lib/utils"
 
 interface MobileHeaderProps {
   waConnected?: boolean
@@ -14,6 +13,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/chat": "KITT",
   "/history": "Historial",
   "/whatsapp-db": "WhatsApp",
+  "/contacts": "Contactos",
   "/settings": "Configuración",
   "/reports": "Reportes",
 }
@@ -29,11 +29,12 @@ export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
   const isChat = pathname.startsWith("/chat")
 
   return (
-    <header className="md:hidden flex items-center justify-between px-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] pt-safe h-14 shrink-0">
-      {/* Botón menú hamburger */}
+    // h-14 + pt-safe = header que respeta el notch/Dynamic Island en iOS
+    <header className="md:hidden flex items-center justify-between px-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] pt-safe shrink-0" style={{ minHeight: "calc(3.5rem + env(safe-area-inset-top, 0px))" }}>
+      {/* Menú — 44×44px mínimo */}
       <button
         onClick={onMenuOpen}
-        className="h-10 w-10 flex items-center justify-center rounded-full text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] transition-colors -ml-1"
+        className="h-11 w-11 flex items-center justify-center rounded-full text-[hsl(var(--text-2))] active:bg-[hsl(var(--surface))] transition-colors touch-manipulation"
         aria-label="Abrir menú"
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -44,15 +45,15 @@ export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
       </button>
 
       {/* Título centrado */}
-      <span className="absolute left-1/2 -translate-x-1/2 text-base font-semibold text-[hsl(var(--text))]">
+      <span className="absolute left-1/2 -translate-x-1/2 text-base font-semibold text-[hsl(var(--text))] pointer-events-none">
         {title}
       </span>
 
-      {/* Acción derecha: nuevo chat (solo en /chat) */}
+      {/* Acción derecha — 44×44px */}
       {isChat ? (
         <button
           onClick={reset}
-          className="h-10 w-10 flex items-center justify-center rounded-full text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] transition-colors -mr-1"
+          className="h-11 w-11 flex items-center justify-center rounded-full text-[hsl(var(--text-2))] active:bg-[hsl(var(--surface))] transition-colors touch-manipulation"
           aria-label="Nuevo chat"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -60,7 +61,7 @@ export function MobileHeader({ onMenuOpen }: MobileHeaderProps) {
           </svg>
         </button>
       ) : (
-        <div className="w-10" />
+        <div className="w-11" />
       )}
     </header>
   )

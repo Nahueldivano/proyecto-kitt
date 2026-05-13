@@ -55,7 +55,7 @@ export function MessageList({ messages, isLoading, thinkingPhase, onSuggestion }
       <div className="max-w-3xl mx-auto space-y-4">
         {isEmpty && !isLoading ? (
           /* Empty state: saludo dinámico con nombre + hora + botones adaptativos */
-          <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-2 select-none">
+          <div className="flex flex-col items-center justify-center min-h-[50dvh] text-center px-2 select-none">
             {/* Ícono asterisco */}
             <div className="mb-5">
               <svg width="52" height="52" viewBox="0 0 56 56" fill="none"

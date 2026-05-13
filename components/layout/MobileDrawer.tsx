@@ -170,7 +170,7 @@ export function MobileDrawer({ open, onClose, waConnected = false, gmailConnecte
           <Link
             href="/chat"
             onClick={handleNewChat}
-            className="flex items-center gap-3 w-full px-3 py-3.5 rounded-xl text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent-soft))] transition-colors mb-1"
+            className="flex items-center gap-3 w-full px-3 py-3.5 rounded-xl text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent-soft))] active:bg-[hsl(var(--accent-soft))] active:opacity-80 transition-colors mb-1 touch-manipulation"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
@@ -188,10 +188,10 @@ export function MobileDrawer({ open, onClose, waConnected = false, gmailConnecte
                   href={item.href}
                   onClick={handleNavClick}
                   className={cn(
-                    "flex items-center gap-3 w-full px-3 py-3.5 rounded-xl transition-colors",
+                    "flex items-center gap-3 w-full px-3 py-3.5 rounded-xl transition-colors touch-manipulation",
                     active
                       ? "bg-[hsl(var(--surface-2))] text-[hsl(var(--text))]"
-                      : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--text))]"
+                      : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] active:bg-[hsl(var(--surface))] hover:text-[hsl(var(--text))] active:opacity-80"
                   )}
                 >
                   <span className={active ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--text-3))]"}>
@@ -250,7 +250,7 @@ export function MobileDrawer({ open, onClose, waConnected = false, gmailConnecte
             </div>
             <button
               onClick={() => { signOut({ callbackUrl: "/login" }); onClose() }}
-              className="h-9 w-9 flex items-center justify-center rounded-full text-[hsl(var(--text-3))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--destructive))] transition-colors"
+              className="h-11 w-11 flex items-center justify-center rounded-full text-[hsl(var(--text-3))] active:bg-[hsl(var(--surface-2))] active:text-[hsl(var(--destructive))] transition-colors touch-manipulation"
               aria-label="Cerrar sesión"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">

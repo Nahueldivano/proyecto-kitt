@@ -94,7 +94,7 @@ export function VoiceButton({ onTranscript, disabled }: VoiceButtonProps) {
       onTouchEnd={stopRecording}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        "h-9 w-9 flex items-center justify-center rounded-full transition-all duration-150 touch-manipulation flex-shrink-0 select-none",
+        "h-11 w-11 flex items-center justify-center rounded-full transition-all duration-150 touch-manipulation flex-shrink-0 select-none",
         isRecording && "bg-red-500 text-white scale-125 shadow-lg shadow-red-500/30",
         isProcessing && "bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))] scale-110",
         !isRecording && !isProcessing && "text-[hsl(var(--text-3))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))]",

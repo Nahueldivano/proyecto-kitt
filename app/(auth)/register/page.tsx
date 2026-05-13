@@ -57,7 +57,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-[hsl(var(--background))] p-4">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-[hsl(var(--background))] p-4 pt-safe pb-safe">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">

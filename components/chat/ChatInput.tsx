@@ -97,9 +97,10 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
     </button>
   )
 
+  // "md" = mobile (44px mínimo), "sm" = desktop toolbar (32px)
   const sendOrCancel = (size: "sm" | "md" = "md") => isStreaming ? (
     <button type="button" onClick={onCancel}
-      className={`${size === "md" ? "h-10 w-10" : "h-8 w-8"} rounded-full border border-red-500/40 text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors`}
+      className={`${size === "md" ? "h-11 w-11" : "h-8 w-8"} rounded-full border border-red-500/40 text-red-500 active:bg-red-500/20 flex items-center justify-center transition-colors touch-manipulation`}
       aria-label="Cancelar">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
     </button>
@@ -107,7 +108,7 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
     <Button type="button" onClick={handleSend}
       disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
       size="icon"
-      className={`${size === "md" ? "h-10 w-10" : "h-8 w-8"} rounded-full`}
+      className={`${size === "md" ? "h-11 w-11" : "h-8 w-8"} rounded-full touch-manipulation`}
       aria-label="Enviar">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>

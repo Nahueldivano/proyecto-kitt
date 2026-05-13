@@ -44,7 +44,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-[hsl(var(--background))] p-4 pt-safe">
+    <div className="min-h-[100dvh] flex items-center justify-center bg-[hsl(var(--background))] p-4 pt-safe pb-safe">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-6 text-center">
