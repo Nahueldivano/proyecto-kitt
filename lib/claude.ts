@@ -384,10 +384,23 @@ async function executeTool(
         }
       }
 
+      // Enriquecer con nombres de la tabla Contact (fuente de verdad)
+      const savedContacts = await db.contact.findMany({
+        where: { tenantId },
+        select: { chatJid: true, phone: true, name: true },
+      }).catch(() => [] as Array<{ chatJid: string; phone: string | null; name: string }>)
+      const contactNameMap = new Map<string, string>()
+      for (const c of savedContacts) {
+        contactNameMap.set(c.chatJid, c.name)
+        if (c.phone) contactNameMap.set(c.phone, c.name)
+      }
+
       const formatted = rows.map((r, i) => {
-        const name = r.chatName ?? r.contactName ?? r.chatJid
+        const phone = r.chatJid.replace(/@.+$/, "")
+        const name = contactNameMap.get(r.chatJid) ?? contactNameMap.get(phone)
+          ?? r.chatName ?? r.contactName ?? r.chatJid
         const dir = r.lastFromMe ? "→" : "←"
-        const ts = r.lastTs.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+        const ts = r.lastTs.toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })
         return `${i + 1}. ${name} [${r.chatJid}] — ${Number(r.messageCount)} msgs — ${ts}\n   ${dir} ${String(r.lastBody).substring(0, 80)}`
       }).join("\n\n")
 
@@ -502,8 +515,26 @@ async function executeTool(
     }
 
     case "send_whatsapp_message": {
+      const rawTo = toolInput.to as string
+      const phonePure = rawTo.replace(/@[^@]+$/, "")
+
+      // Resolver el JID correcto desde tabla Contact (fuente de verdad)
+      const contact = await db.contact.findFirst({
+        where: {
+          tenantId,
+          OR: [
+            { chatJid: rawTo },
+            { chatJid: `${phonePure}@s.whatsapp.net` },
+            { phone: phonePure },
+          ],
+        },
+        select: { chatJid: true },
+      }).catch(() => null)
+
+      const resolvedTo = contact?.chatJid ?? (rawTo.includes("@") ? rawTo : `${rawTo}@s.whatsapp.net`)
+
       const payload = {
-        to: toolInput.to as string,
+        to: resolvedTo,
         message: toolInput.message as string,
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

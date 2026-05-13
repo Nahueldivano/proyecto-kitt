@@ -8,7 +8,6 @@ export async function silentSync(tenantId: string): Promise<void> {
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { config: true } })
   const cfg = (tenant?.config ?? {}) as Record<string, unknown>
   const historyDays = Number(cfg.waHistoryDays ?? 7)
-  const whitelist: string[] = Array.isArray(cfg.waContactWhitelist) ? (cfg.waContactWhitelist as string[]) : []
 
   const since = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
 
@@ -17,7 +16,29 @@ export async function silentSync(tenantId: string): Promise<void> {
     findGroupNames(tenantId),
   ])
 
-  // Actualizar chatName retroactivo para grupos existentes
+  // Cargar contactos guardados en la tabla Contact para:
+  // 1. Priorizar sus nombres sobre los de Evolution
+  // 2. Filtrar por syncEnabled si hay contactos guardados
+  const savedContacts = await db.contact.findMany({
+    where: { tenantId },
+    select: { chatJid: true, phone: true, name: true, syncEnabled: true },
+  }).catch(() => [] as Array<{ chatJid: string; phone: string | null; name: string; syncEnabled: boolean }>)
+
+  // Mapa de JID/phone → nombre del Contact guardado (tiene prioridad máxima)
+  const contactNameOverride = new Map<string, string>()
+  const syncEnabledJids = new Set<string>()
+  for (const c of savedContacts) {
+    contactNameOverride.set(c.chatJid, c.name)
+    if (c.phone) contactNameOverride.set(c.phone, c.name)
+    if (c.syncEnabled) {
+      syncEnabledJids.add(c.chatJid)
+      if (c.phone) syncEnabledJids.add(c.phone)
+    }
+  }
+
+  const hasSavedContacts = savedContacts.length > 0
+
+  // Actualizar chatName retroactivo para grupos
   for (const [jid, name] of groupNamesMap.entries()) {
     await db.$executeRawUnsafe(
       `UPDATE "WhatsappMessage" SET "chatName" = $1 WHERE "tenantId" = $2 AND "chatJid" = $3 AND "chatName" IS NULL`,
@@ -25,30 +46,25 @@ export async function silentSync(tenantId: string): Promise<void> {
     ).catch(() => {})
   }
 
-  // Corregir contactName en chats 1:1:
-  // - Si tenemos nombre de agenda: usarlo para TODOS los mensajes del chat
-  // - Si NO tenemos nombre de agenda: limpiar contactName de mensajes fromMe=true
-  //   (ese nombre es el del tenant, no el del contacto)
+  // Corregir contactName en chats 1:1 usando Contact primero, luego agenda de Evolution
   const allJids = await db.$queryRawUnsafe<Array<{ chatJid: string }>>(
-    `SELECT DISTINCT "chatJid" FROM "WhatsappMessage"
-     WHERE "tenantId" = $1 AND "chatJid" NOT LIKE '%@g.us'`,
+    `SELECT DISTINCT "chatJid" FROM "WhatsappMessage" WHERE "tenantId" = $1 AND "chatJid" NOT LIKE '%@g.us'`,
     tenantId
   ).catch(() => [] as Array<{ chatJid: string }>)
 
   for (const { chatJid } of allJids as Array<{ chatJid: string }>) {
     const phone = chatJid.replace(/@.+$/, "")
-    const agendaName = contactsMap.get(chatJid) ?? contactsMap.get(phone) ?? null
-    if (agendaName) {
-      // Tenemos nombre de agenda → aplicar a todos los mensajes del chat
+    // Prioridad: Contact guardado > agenda Evolution > limpiar si es propio
+    const bestName = contactNameOverride.get(chatJid) ?? contactNameOverride.get(phone)
+      ?? contactsMap.get(chatJid) ?? contactsMap.get(phone) ?? null
+    if (bestName) {
       await db.$executeRawUnsafe(
         `UPDATE "WhatsappMessage" SET "contactName" = $1
          WHERE "tenantId" = $2 AND regexp_replace("chatJid", '@.+$', '') = $3
            AND ("contactName" IS NULL OR "contactName" != $1)`,
-        agendaName, tenantId, phone
+        bestName, tenantId, phone
       ).catch(() => {})
     } else {
-      // Sin nombre de agenda → limpiar contactName de mensajes propios (fromMe=true)
-      // El nombre en esos mensajes es el del tenant, no del contacto
       await db.$executeRawUnsafe(
         `UPDATE "WhatsappMessage" SET "contactName" = NULL
          WHERE "tenantId" = $1 AND regexp_replace("chatJid", '@.+$', '') = $2
@@ -60,16 +76,26 @@ export async function silentSync(tenantId: string): Promise<void> {
 
   const allMessages = await findMessages(tenantId, { limit: 5000 })
   const recent = allMessages.filter((m) => m.timestamp >= since)
-  const filtered = whitelist.length > 0
-    ? recent.filter((m) => whitelist.includes(m.chatJid))
+
+  // Filtrar por syncEnabled de Contact (si hay contactos guardados)
+  // Si no hay contactos aún, sincronizar todo (comportamiento inicial)
+  const filtered = hasSavedContacts
+    ? recent.filter((m) => {
+        const phone = m.chatJid.replace(/@.+$/, "")
+        return syncEnabledJids.has(m.chatJid) || syncEnabledJids.has(phone) || m.chatJid.endsWith("@g.us")
+      })
     : recent
 
   for (const msg of filtered) {
     if (!msg.externalId) continue
     const isGroup = msg.chatJid.endsWith("@g.us")
+    const phone = msg.chatJid.replace(/@.+$/, "")
+    // Prioridad: Contact > agenda Evolution > pushName si no es fromMe
     const contactName = isGroup
       ? (msg.contactName ?? null)
-      : (contactsMap.get(msg.chatJid) ?? (!msg.fromMe ? msg.contactName : null) ?? null)
+      : (contactNameOverride.get(msg.chatJid) ?? contactNameOverride.get(phone)
+          ?? contactsMap.get(msg.chatJid) ?? contactsMap.get(phone)
+          ?? (!msg.fromMe ? msg.contactName : null) ?? null)
     const chatName = isGroup ? (groupNamesMap.get(msg.chatJid) ?? null) : null
     const metadata = msg.messageType === "audio"
       ? JSON.stringify({ messageKey: msg.messageKey, transcribed: false })

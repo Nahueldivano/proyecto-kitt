@@ -1,4 +1,5 @@
 import { getConfig } from "@/lib/config"
+import { db } from "@/lib/db"
 
 // =============================================================
 // Evolution API — WhatsApp integration
@@ -151,17 +152,33 @@ export async function sendTextMessage(
     return
   }
 
-  // Contacto 1:1: resolver el JID real vía whatsappNumbers
-  const numberPure = to.replace(/@[^@]+$/, "")
-  // Fallback: si no tiene @, agregar @s.whatsapp.net para que Evolution lo acepte
-  const jidFallback = to.includes("@") ? to : `${to}@s.whatsapp.net`
-  console.log(`[evolution] sendTextMessage 1:1 — original_to:${to} fallback:${jidFallback}`)
+  // Contacto 1:1: buscar primero en tabla Contact (fuente de verdad del JID correcto)
+  const phonePure = to.replace(/@[^@]+$/, "")
+  let resolvedJid: string | null = null
 
-  // Preguntar a Evolution cuál es el JID verificado para este número
-  const resolvedJid = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
-  const numberToSend = resolvedJid ?? jidFallback
+  try {
+    const contact = await db.contact.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          { chatJid: to },
+          { chatJid: `${phonePure}@s.whatsapp.net` },
+          { phone: phonePure },
+        ],
+      },
+      select: { chatJid: true },
+    })
+    if (contact) resolvedJid = contact.chatJid
+  } catch { /* DB no disponible, continuar sin Contact */ }
 
-  console.log(`[evolution] resolved: ${numberToSend}`)
+  // Si no está en Contact, preguntar a Evolution cuál es el JID real
+  if (!resolvedJid) {
+    resolvedJid = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
+  }
+
+  // Fallback final: agregar @s.whatsapp.net si no tiene sufijo
+  const numberToSend = resolvedJid ?? (to.includes("@") ? to : `${to}@s.whatsapp.net`)
+  console.log(`[evolution] sendTextMessage — original:${to} resolved:${numberToSend}`)
 
   const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
     method: "POST",
@@ -171,7 +188,7 @@ export async function sendTextMessage(
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — number:${numberToSend} original:${to} status:${res.status} body:${err}`)
+    console.error(`[evolution] sendTextMessage failed — number:${numberToSend} status:${res.status} body:${err}`)
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }

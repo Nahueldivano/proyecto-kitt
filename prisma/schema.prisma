@@ -29,6 +29,7 @@ model Tenant {
   folders        Folder[]
   reports        Report[]
   pendingActions PendingAction[]
+  contacts       Contact[]
 }
 
 model User {
@@ -165,6 +166,30 @@ model PendingAction {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status])
+}
+
+// =============================================================
+// CONTACTOS (fuente de verdad para nombres y JIDs de WA)
+// =============================================================
+
+model Contact {
+  id          String   @id @default(cuid())
+  tenantId    String
+  chatJid     String   // JID canónico: número@s.whatsapp.net o grupo@g.us
+  name        String   // Nombre asignado por el usuario
+  phone       String?  // Número puro sin @suffix (para búsqueda)
+  isGroup     Boolean  @default(false)
+  notes       String?
+  tags        String[]
+  syncEnabled Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, chatJid])
+  @@index([tenantId])
+  @@index([tenantId, syncEnabled])
 }
 
 // =============================================================
