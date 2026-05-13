@@ -96,6 +96,35 @@ export async function getStatus(
   }
 }
 
+// Resuelve el número de WhatsApp correcto usando checkNumberStatus de Evolution.
+// Dado un JID o número, devuelve el JID verificado por Evolution, o null si no existe en WA.
+async function resolveWhatsAppNumber(
+  baseUrl: string,
+  headers: HeadersInit,
+  instanceName: string,
+  to: string
+): Promise<string | null> {
+  const phone = to.replace(/@[^@]+$/, "")
+  try {
+    const res = await fetch(`${baseUrl}/chat/whatsappNumbers/${instanceName}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ numbers: [phone] }),
+    })
+    if (!res.ok) return null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await res.json() as any[]
+    if (!Array.isArray(data) || data.length === 0) return null
+    const entry = data[0]
+    // Evolution devuelve { exists: true, jid: "549...@s.whatsapp.net" } o similar
+    if (!entry.exists && !entry.jid) return null
+    const jid = entry.jid ?? entry.remoteJid ?? entry.number
+    return jid ? String(jid).replace(/@[^@]+$/, "") : null
+  } catch {
+    return null
+  }
+}
+
 export async function sendTextMessage(
   tenantId: string,
   to: string,
@@ -104,45 +133,39 @@ export async function sendTextMessage(
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
 
-  // Para grupos @g.us: pasar el JID completo
-  // Para 1:1: Evolution necesita el número puro (sin @suffix).
-  // Intentamos primero con número puro; si falla con 400/exists:false,
-  // intentamos con el JID completo como fallback.
-  const isGroup = to.endsWith("@g.us")
-  const numberPure = isGroup ? to : to.replace(/@[^@]+$/, "")
-
-  console.log(`[evolution] sendTextMessage — original_to:${to} number:${numberPure} instance:${instanceName}`)
-
-  async function trySend(number: string): Promise<Response> {
-    return fetch(`${baseUrl}/message/sendText/${instanceName}`, {
+  // Grupos @g.us: JID completo siempre
+  if (to.endsWith("@g.us")) {
+    const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ number, text: message }),
+      body: JSON.stringify({ number: to, text: message }),
     })
-  }
-
-  let res = await trySend(numberPure)
-
-  // Si falla con "exists:false" y no es grupo, intentar con el JID completo como fallback
-  if (!res.ok && !isGroup) {
-    const errBody = await res.text()
-    if (errBody.includes("exists") || res.status === 400) {
-      console.warn(`[evolution] retry with full JID — original:${numberPure} fallback:${to}`)
-      res = await trySend(to)
-      if (!res.ok) {
-        const err2 = await res.text()
-        console.error(`[evolution] both formats failed — pure:${numberPure} jid:${to} err:${err2}`)
-        throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err2}`)
-      }
-      return
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
     }
-    console.error(`[evolution] sendTextMessage failed — number:${numberPure} status:${res.status} body:${errBody}`)
-    throw new Error(`Evolution sendTextMessage failed (${res.status}): ${errBody}`)
+    return
   }
+
+  // Contacto 1:1: resolver el número real vía checkNumberStatus
+  const numberPure = to.replace(/@[^@]+$/, "")
+  console.log(`[evolution] sendTextMessage 1:1 — original_to:${to} phone:${numberPure}`)
+
+  // Paso 1: verificar con Evolution cuál es el JID real del número
+  const resolvedNumber = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
+  const numberToSend = resolvedNumber ?? numberPure
+
+  console.log(`[evolution] resolved number: ${numberToSend}`)
+
+  const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ number: numberToSend, text: message }),
+  })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — number:${numberPure} status:${res.status} body:${err}`)
+    console.error(`[evolution] sendTextMessage failed — number:${numberToSend} original:${to} status:${res.status} body:${err}`)
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }
