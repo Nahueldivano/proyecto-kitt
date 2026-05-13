@@ -16,6 +16,22 @@ export async function silentSync(tenantId: string): Promise<void> {
     findGroupNames(tenantId),
   ])
 
+  // Auto-guardar contactos nuevos detectados (silencioso, no bloquea)
+  for (const [jid, name] of contactsMap.entries()) {
+    if (!jid.includes("@") || jid.endsWith("@g.us")) continue
+    const phone = jid.replace(/@.+$/, "")
+    db.contact.findFirst({ where: { tenantId, OR: [{ chatJid: jid }, { phone }] }, select: { id: true } })
+      .then(existing => {
+        if (!existing) db.contact.create({ data: { tenantId, chatJid: jid, name, phone, isGroup: false, tags: [], syncEnabled: true } }).catch(() => {})
+      }).catch(() => {})
+  }
+  for (const [jid, name] of groupNamesMap.entries()) {
+    db.contact.findFirst({ where: { tenantId, chatJid: jid }, select: { id: true } })
+      .then(existing => {
+        if (!existing) db.contact.create({ data: { tenantId, chatJid: jid, name, isGroup: true, tags: [], syncEnabled: true } }).catch(() => {})
+      }).catch(() => {})
+  }
+
   // Cargar contactos guardados en la tabla Contact para:
   // 1. Priorizar sus nombres sobre los de Evolution
   // 2. Filtrar por syncEnabled si hay contactos guardados

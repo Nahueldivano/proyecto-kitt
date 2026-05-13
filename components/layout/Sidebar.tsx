@@ -215,42 +215,74 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
     )
   }
 
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+
   return (
     <>
-      <aside className="hidden md:flex flex-col w-60 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] h-full overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-[hsl(var(--border))]">
-          <div className="flex items-center gap-2">
-            <Image src="/kitt-logo.png" alt="KITT" width={56} height={45} className="object-contain" />
-            <div className="flex items-center gap-1.5">
-              <StatusBadge connected={waLive} showLabel={false} />
-              <StatusBadge connected={gmailLive} showLabel={false} />
-            </div>
+      <aside className="hidden md:flex flex-col w-64 border-r border-[hsl(var(--border))] bg-[hsl(var(--background))] h-full overflow-hidden">
+
+        {/* ── TOP: Logo + Nuevo chat + colapsar ── */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2.5">
+            <Image src="/kitt-logo.png" alt="KITT" width={32} height={26} className="object-contain" />
+            <span className="text-sm font-semibold text-[hsl(var(--text))] tracking-tight">KITT</span>
           </div>
-          <button
-            onClick={() => setCollapsed(true)}
-            className="text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))] p-1"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 19l-7-7 7-7"/><path d="M19 19l-7-7 7-7"/></svg>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={newConversation}
+              title="Nuevo chat"
+              className="h-7 w-7 flex items-center justify-center rounded-lg text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))] hover:bg-[hsl(var(--surface))] transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => setCollapsed(true)}
+              title="Colapsar"
+              className="h-7 w-7 flex items-center justify-center rounded-lg text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))] hover:bg-[hsl(var(--surface))] transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 19l-7-7 7-7"/><path d="M19 19l-7-7 7-7"/></svg>
+            </button>
+          </div>
         </div>
 
-        {/* Nueva conversación */}
-        <div className="px-3 py-2">
-          <button
-            onClick={newConversation}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))] transition-colors border border-dashed border-[hsl(var(--border-2))]"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Nueva conversación
-          </button>
-        </div>
+        {/* ── NAV PRINCIPAL ── */}
+        <nav className="px-2 py-1 space-y-0.5">
+          {[
+            { href: "/chat", label: "Chat", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+            { href: "/whatsapp-db", label: "WhatsApp", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+              badge: waLive, badgeColor: "bg-green-500" },
+            { href: "/contacts", label: "Contactos", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+          ].map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+                pathname.startsWith(item.href)
+                  ? "bg-[hsl(var(--surface))] text-[hsl(var(--text))] font-medium"
+                  : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--text))]"
+              )}
+            >
+              <span className={pathname.startsWith(item.href) ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--text-3))]"}>
+                {item.icon}
+              </span>
+              <span className="flex-1">{item.label}</span>
+              {"badge" in item && item.badge && (
+                <span className={`h-1.5 w-1.5 rounded-full ${item.badgeColor}`} />
+              )}
+            </Link>
+          ))}
+        </nav>
 
-        {/* Lista de conversaciones */}
-        <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-4">
+        <div className="mx-4 my-2 border-t border-[hsl(var(--border))]" />
+
+        {/* ── HISTORIAL DE CHATS ── */}
+        <div className="flex-1 overflow-y-auto px-2 min-h-0">
           {/* Carpetas */}
           {folders.length > 0 && (
-            <div>
+            <div className="mb-2">
               {folders.map((folder) => {
                 const folderConvs = conversations.filter((c) => c.folderId === folder.id)
                 const isExpanded = expandedFolders.has(folder.id)
@@ -263,37 +295,23 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
                           next.has(folder.id) ? next.delete(folder.id) : next.add(folder.id)
                           return next
                         })}
-                        className="flex items-center gap-1.5 flex-1 text-xs font-medium text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))] transition-colors"
+                        className="flex items-center gap-1.5 flex-1 text-xs font-medium text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]"
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          {isExpanded
-                            ? <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                            : <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                          }
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                         </svg>
                         <span className="truncate">{folder.name}</span>
-                        <span className="text-[hsl(var(--text-3))]">({folderConvs.length})</span>
+                        <span className="opacity-60">({folderConvs.length})</span>
                       </button>
-                      <button
-                        onClick={(e) => openMenu(e, folder.id, "folder")}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]"
-                      >
+                      <button onClick={(e) => openMenu(e, folder.id, "folder")}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
                       </button>
                     </div>
                     {isExpanded && folderConvs.map((conv) => (
-                      <ConvItem
-                        key={conv.id}
-                        conv={conv}
-                        active={isChat}
-                        editingId={editingId}
-                        editValue={editValue}
-                        setEditValue={setEditValue}
-                        onOpen={openConversation}
-                        onMenu={openMenu}
-                        onRename={renameConv}
-                        indent
-                      />
+                      <ConvItem key={conv.id} conv={conv} active={isChat} editingId={editingId}
+                        editValue={editValue} setEditValue={setEditValue}
+                        onOpen={openConversation} onMenu={openMenu} onRename={renameConv} indent />
                     ))}
                   </div>
                 )
@@ -303,132 +321,119 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
 
           {/* Nueva carpeta */}
           {newFolderMode ? (
-            <div className="px-2">
-              <input
-                autoFocus
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
+            <div className="px-2 mb-1">
+              <input autoFocus value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") createFolder(); if (e.key === "Escape") setNewFolderMode(false) }}
                 onBlur={createFolder}
                 className="w-full text-xs bg-[hsl(var(--background))] border border-[hsl(var(--accent))] rounded px-2 py-1 outline-none text-[hsl(var(--text))]"
-                placeholder="Nombre de la carpeta..."
-              />
+                placeholder="Nombre de la carpeta..." />
             </div>
           ) : (
-            <button
-              onClick={() => setNewFolderMode(true)}
-              className="mx-2 flex items-center gap-1 text-xs text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))] transition-colors"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <button onClick={() => setNewFolderMode(true)}
+              className="mx-2 mb-1 flex items-center gap-1 text-xs text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nueva carpeta
             </button>
           )}
 
-          {/* Grupos por fecha */}
+          {/* Recientes por fecha */}
           {groups.map((group) => (
-            <div key={group.label}>
+            <div key={group.label} className="mb-1">
               <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-3))]">
                 {group.label}
               </p>
               {group.items.map((conv) => (
-                <ConvItem
-                  key={conv.id}
-                  conv={conv}
-                  active={isChat}
-                  editingId={editingId}
-                  editValue={editValue}
-                  setEditValue={setEditValue}
-                  onOpen={openConversation}
-                  onMenu={openMenu}
-                  onRename={renameConv}
-                />
+                <ConvItem key={conv.id} conv={conv} active={isChat} editingId={editingId}
+                  editValue={editValue} setEditValue={setEditValue}
+                  onOpen={openConversation} onMenu={openMenu} onRename={renameConv} />
               ))}
             </div>
           ))}
 
           {conversations.length === 0 && (
-            <p className="px-3 py-4 text-xs text-[hsl(var(--text-3))] text-center">
-              Todavía no hay conversaciones
-            </p>
+            <p className="px-3 py-6 text-xs text-[hsl(var(--text-3))] text-center">Sin conversaciones aún</p>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-3 border-t border-[hsl(var(--border))] space-y-2">
-          {/* Estado de conexiones */}
-          <div className="space-y-1 pb-1">
-            <ConnectionRow
-              label="WhatsApp"
-              connected={waLive}
+        {/* ── FOOTER: perfil + acciones ── */}
+        <div className="border-t border-[hsl(var(--border))] p-2">
+          {/* Estado conexiones — compacto */}
+          <div className="flex items-center gap-2 px-2 py-1.5 mb-1">
+            <button
               onClick={() => router.push("/settings?tab=conexiones")}
-            />
-            <ConnectionRow
-              label="Gmail"
-              connected={gmailLive}
-              onClick={() => router.push("/settings?tab=conexiones")}
-            />
-          </div>
-
-          <Link
-            href="/whatsapp-db"
-            className={cn(
-              "flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors",
-              pathname.startsWith("/whatsapp-db")
-                ? "bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
-                : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))]"
-            )}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
-            Base de datos
-          </Link>
-
-          <Link
-            href="/contacts"
-            className={cn(
-              "flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors",
-              pathname.startsWith("/contacts")
-                ? "bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
-                : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))]"
-            )}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-            Contactos
-          </Link>
-
-          <div className="flex items-center justify-between">
-            <Link
-              href="/settings"
-              className={cn(
-                "flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors",
-                pathname.startsWith("/settings")
-                  ? "bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
-                  : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))]"
-              )}
+              className={cn("flex items-center gap-1.5 text-[10px] transition-colors rounded px-1.5 py-0.5",
+                waLive ? "text-green-500 hover:bg-green-500/10" : "text-[hsl(var(--text-3))] hover:bg-[hsl(var(--surface))]")}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-              Configuración
-            </Link>
-            <div className="flex items-center gap-1">
-              <ThemeToggle />
-              <button
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="text-xs text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))] px-1.5 py-1"
-              >
-                Salir
-              </button>
-            </div>
+              <span className={cn("h-1.5 w-1.5 rounded-full", waLive ? "bg-green-500" : "bg-[hsl(var(--text-3))] opacity-40")} />
+              WA
+            </button>
+            <button
+              onClick={() => router.push("/settings?tab=conexiones")}
+              className={cn("flex items-center gap-1.5 text-[10px] transition-colors rounded px-1.5 py-0.5",
+                gmailLive ? "text-green-500 hover:bg-green-500/10" : "text-[hsl(var(--text-3))] hover:bg-[hsl(var(--surface))]")}
+            >
+              <span className={cn("h-1.5 w-1.5 rounded-full", gmailLive ? "bg-green-500" : "bg-[hsl(var(--text-3))] opacity-40")} />
+              Gmail
+            </button>
           </div>
-          {session?.user && (
-            <div className="px-1">
-              <p className="text-xs font-medium text-[hsl(var(--text-2))] truncate">
-                {session.user.name ?? session.user.email}
-              </p>
-              <p className="text-xs text-[hsl(var(--text-3))] truncate">{session.user.email}</p>
-            </div>
-          )}
+
+          {/* Perfil con popup de opciones — estilo Grok */}
+          <div className="relative">
+            <button
+              onClick={() => setProfileMenuOpen(v => !v)}
+              className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-[hsl(var(--surface))] transition-colors text-left"
+            >
+              <div className="h-7 w-7 rounded-full bg-[hsl(var(--accent))] flex items-center justify-center shrink-0">
+                <span className="text-white text-xs font-semibold">
+                  {(session?.user?.name ?? session?.user?.email ?? "U").charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-[hsl(var(--text))] truncate">
+                  {session?.user?.name ?? session?.user?.email}
+                </p>
+                {session?.user?.name && (
+                  <p className="text-[10px] text-[hsl(var(--text-3))] truncate">{session?.user?.email}</p>
+                )}
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[hsl(var(--text-3))] shrink-0">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            {/* Popup menú de perfil */}
+            {profileMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
+                <div className="absolute bottom-full left-0 right-0 mb-1 z-50 bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-xl shadow-xl py-1 overflow-hidden">
+                  <Link href="/settings" onClick={() => setProfileMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))] transition-colors">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                    Configuración
+                  </Link>
+                  <Link href="/whatsapp-db" onClick={() => setProfileMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))] transition-colors">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+                    Base de datos WA
+                  </Link>
+                  <div className="flex items-center px-4 py-2">
+                    <ThemeToggle />
+                    <span className="ml-2 text-sm text-[hsl(var(--text-2))]">Tema</span>
+                  </div>
+                  <div className="border-t border-[hsl(var(--border))] my-1" />
+                  <button
+                    onClick={() => { setProfileMenuOpen(false); signOut({ callbackUrl: "/login" }) }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Cerrar sesión
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </aside>
 

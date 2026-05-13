@@ -101,6 +101,32 @@ export async function POST(req: NextRequest) {
   ])
   diagnostics.push(`contacts loaded: ${contactsMap.size}, groups: ${groupNamesMap.size}`)
 
+  // Auto-guardar contactos en tabla Contact (upsert — nunca sobreescribe nombres editados por el usuario)
+  let contactsAutoSaved = 0
+  // 1:1 contacts desde Evolution agenda
+  for (const [jid, name] of contactsMap.entries()) {
+    if (!jid.includes("@") || jid.endsWith("@g.us")) continue
+    const phone = jid.replace(/@.+$/, "")
+    try {
+      const existing = await db.contact.findFirst({ where: { tenantId, OR: [{ chatJid: jid }, { phone }] }, select: { id: true } })
+      if (!existing) {
+        await db.contact.create({ data: { tenantId, chatJid: jid, name, phone, isGroup: false, tags: [], syncEnabled: true } })
+        contactsAutoSaved++
+      }
+    } catch { /* ignorar duplicados */ }
+  }
+  // Grupos
+  for (const [jid, name] of groupNamesMap.entries()) {
+    try {
+      const existing = await db.contact.findFirst({ where: { tenantId, chatJid: jid }, select: { id: true } })
+      if (!existing) {
+        await db.contact.create({ data: { tenantId, chatJid: jid, name, isGroup: true, tags: [], syncEnabled: true } })
+        contactsAutoSaved++
+      }
+    } catch { /* ignorar duplicados */ }
+  }
+  if (contactsAutoSaved > 0) diagnostics.push(`contacts auto-saved: ${contactsAutoSaved}`)
+
   // Actualizar chatName retroactivo para grupos
   let retroUpdated = 0
   for (const [jid, name] of groupNamesMap.entries()) {
