@@ -152,43 +152,22 @@ export async function sendTextMessage(
     return
   }
 
-  // Contacto 1:1: buscar primero en tabla Contact (fuente de verdad del JID correcto)
+  // Contacto 1:1: Evolution en esta instancia acepta SOLO el número puro (sin @suffix).
+  // Mandar número@s.whatsapp.net devuelve 400 "exists:false" siempre.
+  // Grupos funcionan con JID completo (@g.us), 1:1 necesitan número puro.
   const phonePure = to.replace(/@[^@]+$/, "")
-  let resolvedJid: string | null = null
 
-  try {
-    const contact = await db.contact.findFirst({
-      where: {
-        tenantId,
-        OR: [
-          { chatJid: to },
-          { chatJid: `${phonePure}@s.whatsapp.net` },
-          { phone: phonePure },
-        ],
-      },
-      select: { chatJid: true },
-    })
-    if (contact) resolvedJid = contact.chatJid
-  } catch { /* DB no disponible, continuar sin Contact */ }
-
-  // Si no está en Contact, preguntar a Evolution cuál es el JID real
-  if (!resolvedJid) {
-    resolvedJid = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
-  }
-
-  // Fallback final: agregar @s.whatsapp.net si no tiene sufijo
-  const numberToSend = resolvedJid ?? (to.includes("@") ? to : `${to}@s.whatsapp.net`)
-  console.log(`[evolution] sendTextMessage — original:${to} resolved:${numberToSend}`)
+  console.log(`[evolution] sendTextMessage 1:1 — original:${to} → sending:${phonePure}`)
 
   const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ number: numberToSend, text: message }),
+    body: JSON.stringify({ number: phonePure, text: message }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — number:${numberToSend} status:${res.status} body:${err}`)
+    console.error(`[evolution] sendTextMessage failed — number:${phonePure} status:${res.status} body:${err}`)
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }
