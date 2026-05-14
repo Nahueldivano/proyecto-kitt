@@ -288,11 +288,11 @@ export async function POST(req: NextRequest) {
       diagnostics.push(`transcribed: ${totalTranscribed}, errors: ${transcribeErrors}`)
     }
 
-    // FASE 3: crear contactos para TODOS los chats en DB que no tengan entrada en Contact
-    // Esto garantiza que sync → contactos siempre funcione
+    // FASE 3: crear contactos SOLO para chats con actividad en los últimos 30 días
+    // Y solo si tienen nombre real (no solo número). No crear contactos sin nombre.
     let contactsCreated = 0
     try {
-      const allChatsInDb = await db.$queryRawUnsafe<Array<{
+      const recentChats = await db.$queryRawUnsafe<Array<{
         chatJid: string
         contactName: string | null
         chatName: string | null
@@ -306,15 +306,20 @@ export async function POST(req: NextRequest) {
           (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName"
         FROM "WhatsappMessage"
         WHERE "tenantId" = $1
+          AND "timestamp" >= NOW() - INTERVAL '30 days'
         GROUP BY "chatJid"
       `, tenantId)
 
-      for (const row of allChatsInDb) {
+      for (const row of recentChats) {
         if (!row.chatJid?.includes("@")) continue
+        const isGroup = row.chatJid.endsWith("@g.us")
+        const phone = isGroup ? null : row.chatJid.replace(/@.+$/, "")
+        const bestName = row.chatName ?? row.contactName ?? null
+
+        // Solo crear si tiene nombre real (no solo número)
+        if (!bestName) continue
+
         try {
-          const isGroup = row.chatJid.endsWith("@g.us")
-          const phone = isGroup ? null : row.chatJid.replace(/@.+$/, "")
-          const bestName = row.chatName ?? row.contactName ?? (phone ?? row.chatJid)
           await db.contact.upsert({
             where: { tenantId_chatJid: { tenantId, chatJid: row.chatJid } },
             update: {}, // nunca sobreescribir nombre editado por usuario
