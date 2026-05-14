@@ -47,20 +47,25 @@ export function ApprovalCard({
   onApproved,
   onRejected,
 }: ApprovalCardProps) {
-  const [status, setStatus] = useState<"pending" | "loading-approve" | "loading-reject" | "approved" | "rejected">("pending")
+  const [status, setStatus] = useState<"pending" | "loading-approve" | "loading-reject" | "loading-retry" | "approved" | "rejected" | "failed">("pending")
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   async function handleApprove() {
     setStatus("loading-approve")
+    setErrorMsg(null)
     try {
       const res = await fetch(`/api/actions/${actionId}/approve`, { method: "POST" })
       if (res.ok) {
         setStatus("approved")
         onApproved?.()
       } else {
-        setStatus("pending")
+        const data = await res.json().catch(() => ({ error: "No se pudo enviar." }))
+        setErrorMsg(data?.error ?? "No se pudo enviar.")
+        setStatus("failed")
       }
     } catch {
-      setStatus("pending")
+      setErrorMsg("Error de red. Intentalo de nuevo.")
+      setStatus("failed")
     }
   }
 
@@ -76,6 +81,25 @@ export function ApprovalCard({
       }
     } catch {
       setStatus("pending")
+    }
+  }
+
+  async function handleRetry() {
+    setStatus("loading-retry")
+    try {
+      const res = await fetch(`/api/actions/${actionId}/retry`, { method: "POST" })
+      if (res.ok) {
+        setErrorMsg(null)
+        setStatus("approved")
+        onApproved?.()
+      } else {
+        const data = await res.json().catch(() => ({ error: "No se pudo reintentar." }))
+        setErrorMsg(data?.error ?? "No se pudo reintentar.")
+        setStatus("failed")
+      }
+    } catch {
+      setErrorMsg("Error de red. Intentalo de nuevo.")
+      setStatus("failed")
     }
   }
 
@@ -137,10 +161,31 @@ export function ApprovalCard({
         </div>
       )}
 
-      {(status === "loading-approve" || status === "loading-reject") && (
+      {(status === "loading-approve" || status === "loading-reject" || status === "loading-retry") && (
         <div className="px-3 pb-3">
           <Button variant="outline" size="sm" className="w-full" loading>
             Procesando...
+          </Button>
+        </div>
+      )}
+
+      {status === "failed" && (
+        <div className="px-3 pb-3 space-y-2">
+          <p className="text-xs text-[hsl(var(--danger))] flex items-start gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mt-0.5 shrink-0">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{errorMsg ?? "No se pudo enviar."}</span>
+          </p>
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full"
+            onClick={handleRetry}
+          >
+            Reintentar
           </Button>
         </div>
       )}

@@ -219,6 +219,15 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "sync_whatsapp",
+    description: "Sincroniza manualmente los mensajes recientes de WhatsApp desde Evolution API hacia la base local. Usalo SOLO cuando el usuario lo pida explícitamente ('actualizá WhatsApp', 'sincronizá', 'refrescá los chats'). En condiciones normales no hace falta: los mensajes entrantes se insertan en tiempo real vía webhook.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
     name: "create_artifact",
     description: "Crea contenido en el panel lateral: documento, HTML interactivo, gráfico o código. Usalo para cualquier entregable de más de ~15 líneas de contenido estructurado. El chat queda para la conversación; el artefacto para el entregable.",
     input_schema: {
@@ -515,29 +524,11 @@ async function executeTool(
     }
 
     case "send_whatsapp_message": {
-      const rawTo = toolInput.to as string
-      const phonePure = rawTo.replace(/@[^@]+$/, "")
-
-      // Resolver el JID correcto desde tabla Contact (fuente de verdad).
-      // Preferir el campo `phone` del Contact (número real validado) sobre el chatJid
-      // que puede ser un @lid normalizado incorrectamente.
-      const contact = await db.contact.findFirst({
-        where: {
-          tenantId,
-          OR: [
-            { chatJid: rawTo },
-            { chatJid: `${phonePure}@s.whatsapp.net` },
-            { phone: phonePure },
-          ],
-        },
-        select: { chatJid: true, phone: true },
-      }).catch(() => null)
-
-      // Usar phone del Contact si existe (número real), sino el chatJid, sino el rawTo
-      const resolvedTo = contact?.phone ?? contact?.chatJid ?? rawTo
-
+      // La resolución de JID/número se hace al momento de enviar (lib/whatsapp-recipient.ts).
+      // Guardamos el `to` tal cual lo pidió el modelo para que el normalizador re-resuelva
+      // contra la tabla Contact en cada intento.
       const payload = {
-        to: resolvedTo,
+        to: toolInput.to as string,
         message: toolInput.message as string,
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -582,6 +573,17 @@ async function executeTool(
         batchId,
         batchTitle: title,
         batchTasks,
+      }
+    }
+
+    case "sync_whatsapp": {
+      try {
+        const { silentSync } = await import("@/lib/silentSync")
+        await silentSync(tenantId)
+        return { toolResult: "WhatsApp sincronizado." }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { toolResult: `No pude sincronizar WhatsApp: ${msg}` }
       }
     }
 
@@ -761,6 +763,7 @@ LO QUE ${assistantName} NO HACE
 - No inventa información. Si no sabe algo, lo dice sin rodeos.
 - No envía nada sin aprobación explícita del usuario.
 - No resume comunicaciones por iniciativa propia.
+- No sincroniza WhatsApp automáticamente. Los mensajes nuevos llegan al instante vía webhook; los datos en DB están actualizados. Solo usá la tool sync_whatsapp si el usuario lo pide explícitamente ("actualizá", "sincronizá", "refrescá").
 - No responde en otro idioma que no sea español.
 - No actúa fuera de lo que el usuario pidió.
 - No rellena respuestas con frases vacías ni con exceso de cortesía.

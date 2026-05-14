@@ -8,6 +8,13 @@ import Anthropic from "@anthropic-ai/sdk"
 
 const MEMORY_TTL = 60 * 60 * 24 * 90 // 90 días en segundos
 export const MAX_FACTS = 40 // máximo de hechos a retener
+const MIN_LAST_USER_LEN = 30 // saltear extracción si último mensaje del user es muy corto
+const EXTRACTION_COOLDOWN_SEC = 120 // 2 min entre extracciones por tenant
+const CONFIRM_REGEX = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo)?|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda|gracias|no)\b/i
+
+function memoryLastKey(tenantId: string): string {
+  return `kitt:memory:last:${tenantId}`
+}
 
 export interface TrackedEntity {
   type: "whatsapp" | "email"
@@ -68,6 +75,16 @@ export async function updateMemoryFromConversation(
   conversation: { role: string; content: string }[]
 ): Promise<void> {
   if (conversation.length < 2 || !apiKey) return
+
+  // Skip si el último mensaje del usuario es una confirmación corta o trivial:
+  // no hay información nueva que extraer y solo gasta llamadas a Haiku.
+  const lastUser = [...conversation].reverse().find((m) => m.role === "user")?.content?.trim() ?? ""
+  if (lastUser.length < MIN_LAST_USER_LEN || CONFIRM_REGEX.test(lastUser)) return
+
+  // Cooldown: máximo una extracción cada EXTRACTION_COOLDOWN_SEC por tenant.
+  const lastRaw = await safeGet(memoryLastKey(tenantId))
+  const lastTs = lastRaw ? Number(lastRaw) : 0
+  if (lastTs && Date.now() - lastTs < EXTRACTION_COOLDOWN_SEC * 1000) return
 
   try {
     const client = new Anthropic({ apiKey })
@@ -130,6 +147,7 @@ Respondé ÚNICAMENTE con un JSON array:
     memory.lastTopics = topics
 
     await saveMemory(tenantId, memory)
+    await safeSet(memoryLastKey(tenantId), String(Date.now()), EXTRACTION_COOLDOWN_SEC * 3)
   } catch (err) {
     // No bloquear la respuesta principal si falla la memoria
     console.warn("[memory] updateMemoryFromConversation error:", err)

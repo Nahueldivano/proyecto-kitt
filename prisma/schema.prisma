@@ -156,14 +156,16 @@ model Report {
 // =============================================================
 
 model PendingAction {
-  id        String   @id @default(cuid())
-  tenantId  String
-  type      String   // send_email | reply_email | send_whatsapp_message
-  payload   Json
-  status    String   @default("pending") // pending | approved | rejected
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  tenantId     String
+  type         String    // send_email | reply_email | send_whatsapp_message
+  payload      Json
+  status       String    @default("pending") // pending | approved | rejected | failed
+  errorMessage String?
+  executedAt   DateTime?
+  createdAt    DateTime  @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status])
 }

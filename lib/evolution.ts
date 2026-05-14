@@ -1,5 +1,6 @@
 import { getConfig } from "@/lib/config"
 import { db } from "@/lib/db"
+import { resolveWhatsAppRecipient } from "@/lib/whatsapp-recipient"
 
 // =============================================================
 // Evolution API — WhatsApp integration
@@ -138,52 +139,21 @@ export async function sendTextMessage(
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
 
-  // Grupos @g.us: JID completo siempre
-  if (to.endsWith("@g.us")) {
-    const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ number: to, text: message }),
-    })
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
-    }
-    return
-  }
-
-  // Contacto 1:1: Evolution acepta el número puro (sin @suffix).
-  const phonePure = to.replace(/@[^@]+$/, "")
-
-  // Detectar si es un @lid (número interno de Baileys, no número de teléfono real).
-  // Los @lid suelen tener 14+ dígitos y no corresponden a ningún teléfono.
-  // En ese caso, preguntar a Evolution cuál es el número/JID real del contacto.
-  let numberToSend = phonePure
-  const isLikelyLid = phonePure.length > 13 && !phonePure.startsWith("549") && !phonePure.startsWith("54")
-
-  if (isLikelyLid) {
-    console.log(`[evolution] detected @lid number: ${phonePure}, resolving via whatsappNumbers...`)
-    const resolved = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
-    if (resolved) {
-      // resolveWhatsAppNumber devuelve JID completo, extraer número puro
-      numberToSend = resolved.replace(/@[^@]+$/, "")
-      console.log(`[evolution] resolved @lid ${phonePure} → ${numberToSend}`)
-    } else {
-      console.warn(`[evolution] could not resolve @lid ${phonePure}, trying as-is`)
-    }
-  }
-
-  console.log(`[evolution] sendTextMessage 1:1 — original:${to} → sending:${numberToSend}`)
+  const recipient = await resolveWhatsAppRecipient(tenantId, to, (input) =>
+    resolveWhatsAppNumber(baseUrl, headers, instanceName, input)
+  )
 
   const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ number: numberToSend, text: message }),
+    body: JSON.stringify({ number: recipient.number, text: message }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — number:${numberToSend} original:${to} status:${res.status} body:${err}`)
+    console.error(
+      `[evolution] sendTextMessage failed — number:${recipient.number} source:${recipient.source} original:${to} status:${res.status} body:${err}`
+    )
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }

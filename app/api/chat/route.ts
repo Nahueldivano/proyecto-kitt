@@ -143,13 +143,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Sync fantasma: insertar mensajes nuevos de WA sin bloquear el chat
-    try {
-      const { silentSync } = await import("@/lib/silentSync")
-      await silentSync(tenantId)
-    } catch {
-      // silencioso — nunca bloquea el chat
-    }
+    // Los mensajes entrantes de WhatsApp se insertan en tiempo real vía webhook,
+    // así que no sincronizamos contra Evolution acá. Si el usuario quiere refrescar,
+    // pide explícitamente y el modelo usa la tool sync_whatsapp.
 
     let finalMessage = ""
     let artifact: Artifact | undefined

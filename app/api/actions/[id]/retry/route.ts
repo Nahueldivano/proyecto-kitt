@@ -4,7 +4,6 @@ import { db } from "@/lib/db"
 import { sendEmail, replyToEmail } from "@/lib/gmail"
 import { sendTextMessage } from "@/lib/evolution"
 
-// Convierte errores técnicos de Evolution/Gmail en mensajes legibles para el usuario
 function friendlyError(raw: string, type: string): string {
   if (type === "send_whatsapp_message") {
     if (raw.includes("exists\":false") || raw.includes("400")) {
@@ -36,17 +35,17 @@ export async function POST(
     const tenantId = session.user.tenantId
 
     const action = await db.pendingAction.findUnique({ where: { id } })
-
     if (!action) {
       return NextResponse.json({ error: "Acción no encontrada" }, { status: 404 })
     }
-
     if (action.tenantId !== tenantId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
-
-    if (action.status !== "pending") {
-      return NextResponse.json({ error: "La acción ya fue procesada" }, { status: 409 })
+    if (action.status !== "failed") {
+      return NextResponse.json(
+        { error: "Solo se pueden reintentar acciones fallidas" },
+        { status: 409 }
+      )
     }
 
     const payload = action.payload as Record<string, string>
@@ -72,18 +71,17 @@ export async function POST(
         where: { id },
         data: { status: "failed", errorMessage: friendly, executedAt: new Date() },
       }).catch(() => {})
-      console.error("[actions/approve] exec error:", raw)
+      console.error("[actions/retry] exec error:", raw)
       return NextResponse.json({ error: friendly }, { status: 500 })
     }
 
     await db.pendingAction.update({
       where: { id },
-      data: { status: "approved", executedAt: new Date() },
+      data: { status: "approved", errorMessage: null, executedAt: new Date() },
     })
     return NextResponse.json({ success: true })
   } catch (error) {
-    const raw = error instanceof Error ? error.message : String(error)
-    console.error("[actions/approve] error:", raw)
-    return NextResponse.json({ error: "No se pudo procesar la acción." }, { status: 500 })
+    console.error("[actions/retry] error:", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

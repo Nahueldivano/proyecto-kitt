@@ -50,7 +50,10 @@ export async function POST(req: NextRequest) {
             continue
         }
 
-        await db.pendingAction.update({ where: { id }, data: { status: "approved" } })
+        await db.pendingAction.update({
+          where: { id },
+          data: { status: "approved", executedAt: new Date() },
+        })
         results.push({ id, status: "approved" })
       } catch (err) {
         const raw = err instanceof Error ? err.message : "Error desconocido"
@@ -65,7 +68,10 @@ export async function POST(req: NextRequest) {
           }
         }
         results.push({ id, status: "error", error: userMsg })
-        await db.pendingAction.update({ where: { id }, data: { status: "rejected" } }).catch(() => {})
+        await db.pendingAction.update({
+          where: { id },
+          data: { status: "failed", errorMessage: userMsg, executedAt: new Date() },
+        }).catch(() => {})
       }
     }
 
