@@ -518,7 +518,9 @@ async function executeTool(
       const rawTo = toolInput.to as string
       const phonePure = rawTo.replace(/@[^@]+$/, "")
 
-      // Resolver el JID correcto desde tabla Contact (fuente de verdad)
+      // Resolver el JID correcto desde tabla Contact (fuente de verdad).
+      // Preferir el campo `phone` del Contact (número real validado) sobre el chatJid
+      // que puede ser un @lid normalizado incorrectamente.
       const contact = await db.contact.findFirst({
         where: {
           tenantId,
@@ -528,10 +530,11 @@ async function executeTool(
             { phone: phonePure },
           ],
         },
-        select: { chatJid: true },
+        select: { chatJid: true, phone: true },
       }).catch(() => null)
 
-      const resolvedTo = contact?.chatJid ?? (rawTo.includes("@") ? rawTo : `${rawTo}@s.whatsapp.net`)
+      // Usar phone del Contact si existe (número real), sino el chatJid, sino el rawTo
+      const resolvedTo = contact?.phone ?? contact?.chatJid ?? rawTo
 
       const payload = {
         to: resolvedTo,

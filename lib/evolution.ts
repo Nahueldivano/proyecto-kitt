@@ -152,22 +152,38 @@ export async function sendTextMessage(
     return
   }
 
-  // Contacto 1:1: Evolution en esta instancia acepta SOLO el número puro (sin @suffix).
-  // Mandar número@s.whatsapp.net devuelve 400 "exists:false" siempre.
-  // Grupos funcionan con JID completo (@g.us), 1:1 necesitan número puro.
+  // Contacto 1:1: Evolution acepta el número puro (sin @suffix).
   const phonePure = to.replace(/@[^@]+$/, "")
 
-  console.log(`[evolution] sendTextMessage 1:1 — original:${to} → sending:${phonePure}`)
+  // Detectar si es un @lid (número interno de Baileys, no número de teléfono real).
+  // Los @lid suelen tener 14+ dígitos y no corresponden a ningún teléfono.
+  // En ese caso, preguntar a Evolution cuál es el número/JID real del contacto.
+  let numberToSend = phonePure
+  const isLikelyLid = phonePure.length > 13 && !phonePure.startsWith("549") && !phonePure.startsWith("54")
+
+  if (isLikelyLid) {
+    console.log(`[evolution] detected @lid number: ${phonePure}, resolving via whatsappNumbers...`)
+    const resolved = await resolveWhatsAppNumber(baseUrl, headers, instanceName, to)
+    if (resolved) {
+      // resolveWhatsAppNumber devuelve JID completo, extraer número puro
+      numberToSend = resolved.replace(/@[^@]+$/, "")
+      console.log(`[evolution] resolved @lid ${phonePure} → ${numberToSend}`)
+    } else {
+      console.warn(`[evolution] could not resolve @lid ${phonePure}, trying as-is`)
+    }
+  }
+
+  console.log(`[evolution] sendTextMessage 1:1 — original:${to} → sending:${numberToSend}`)
 
   const res = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ number: phonePure, text: message }),
+    body: JSON.stringify({ number: numberToSend, text: message }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[evolution] sendTextMessage failed — number:${phonePure} status:${res.status} body:${err}`)
+    console.error(`[evolution] sendTextMessage failed — number:${numberToSend} original:${to} status:${res.status} body:${err}`)
     throw new Error(`Evolution sendTextMessage failed (${res.status}): ${err}`)
   }
 }

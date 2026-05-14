@@ -313,7 +313,9 @@ export async function POST(req: NextRequest) {
       for (const row of recentChats) {
         if (!row.chatJid?.includes("@")) continue
         const isGroup = row.chatJid.endsWith("@g.us")
-        const phone = isGroup ? null : row.chatJid.replace(/@.+$/, "")
+        const isLid = row.chatJid.endsWith("@lid") || row.chatJid.endsWith("@c.us")
+        // Para @lid: no guardar el phone (es un ID interno, no un número de teléfono)
+        const phone = (isGroup || isLid) ? null : row.chatJid.replace(/@.+$/, "")
         const bestName = row.chatName ?? row.contactName ?? null
 
         // Solo crear si tiene nombre real (no solo número)
