@@ -99,6 +99,9 @@ function WhatsAppPanel() {
   const [syncSince, setSyncSince] = useState("")
   const [syncUntil, setSyncUntil] = useState("")
   const [whitelistCount, setWhitelistCount] = useState<number>(0)
+  const [savingContact, setSavingContact] = useState<string | null>(null) // chatJid en proceso
+  const [editingContactName, setEditingContactName] = useState<Record<string, string>>({}) // chatJid → nombre temporal
+  const [savedContacts, setSavedContacts] = useState<Set<string>>(new Set()) // chatJids ya guardados
 
   const loadChats = useCallback(async () => {
     setLoading(true)
@@ -120,6 +123,14 @@ function WhatsAppPanel() {
         setWhitelistCount(Array.isArray(wl) ? wl.length : 0)
       })
       .catch(() => {})
+    // Cargar contactos ya guardados para mostrar estado en la UI
+    fetch("/api/contacts")
+      .then((r) => r.json())
+      .then((d) => {
+        const jids = new Set<string>((d.contacts ?? []).map((c: { chatJid: string }) => c.chatJid.replace(/@.+$/, "")))
+        setSavedContacts(jids)
+      })
+      .catch(() => {})
   }, [loadChats])
 
   const loadMessages = useCallback(async (chat: ChatRow) => {
@@ -135,6 +146,29 @@ function WhatsAppPanel() {
   useEffect(() => {
     if (selected) { loadMessages(selected); setSearchResults(null) }
   }, [selected, loadMessages])
+
+  const onSaveContact = useCallback(async (chat: ChatRow) => {
+    const phone = chat.chatJid.replace(/@.+$/, "")
+    if (savedContacts.has(phone)) return // ya guardado
+
+    const name = editingContactName[chat.chatJid] ?? chatDisplayName(chat)
+    setSavingContact(chat.chatJid)
+    try {
+      const r = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatJid: chat.chatJid,
+          name,
+          isGroup: chat.chatJid.endsWith("@g.us"),
+        }),
+      })
+      if (r.ok) {
+        setSavedContacts(prev => new Set([...prev, phone]))
+      }
+    } catch { /* silencioso */ }
+    finally { setSavingContact(null) }
+  }, [savedContacts, editingContactName])
 
   const onSearch = useCallback(async () => {
     const q = search.trim()
@@ -366,9 +400,39 @@ function WhatsAppPanel() {
             <div className="px-4 py-3 border-b border-[hsl(var(--border))] flex items-center justify-between gap-3">
               <button onClick={() => setSelected(null)} className="md:hidden text-sm text-[hsl(var(--text-2))]">← Volver</button>
               <div className="flex-1 min-w-0">
-                <h2 className="text-sm font-semibold text-[hsl(var(--text))] truncate">{chatDisplayName(selected)}</h2>
+                {/* Nombre editable del contacto */}
+                {savedContacts.has(selected.chatJid.replace(/@.+$/, "")) ? (
+                  <h2 className="text-sm font-semibold text-[hsl(var(--text))] truncate flex items-center gap-1.5">
+                    {chatDisplayName(selected)}
+                    <span className="text-[10px] text-green-500 font-normal">● guardado</span>
+                  </h2>
+                ) : (
+                  <input
+                    value={editingContactName[selected.chatJid] ?? chatDisplayName(selected)}
+                    onChange={(e) => setEditingContactName(prev => ({ ...prev, [selected.chatJid]: e.target.value }))}
+                    className="text-sm font-semibold text-[hsl(var(--text))] bg-transparent border-b border-transparent focus:border-[hsl(var(--accent))] outline-none w-full max-w-[180px] truncate"
+                    placeholder="Nombre del contacto"
+                  />
+                )}
                 <p className="text-[10px] text-[hsl(var(--text-3))] truncate">{selected.chatJid} · {selected.messageCount} mensajes</p>
               </div>
+              {/* Botón guardar como contacto */}
+              {!savedContacts.has(selected.chatJid.replace(/@.+$/, "")) && (
+                <button
+                  onClick={() => onSaveContact(selected)}
+                  disabled={savingContact === selected.chatJid}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[hsl(var(--accent))] text-white hover:opacity-90 disabled:opacity-50 shrink-0 transition-opacity"
+                >
+                  {savingContact === selected.chatJid ? (
+                    "Guardando..."
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                      Guardar contacto
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[hsl(var(--bg))]">

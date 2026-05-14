@@ -248,6 +248,33 @@ export async function register() {
       )
     `)
 
+    // ── Contact ───────────────────────────────────────────────────────────────
+    await exec(`
+      CREATE TABLE IF NOT EXISTS "Contact" (
+        "id"          TEXT    NOT NULL,
+        "tenantId"    TEXT    NOT NULL,
+        "chatJid"     TEXT    NOT NULL,
+        "name"        TEXT    NOT NULL,
+        "phone"       TEXT,
+        "isGroup"     BOOLEAN NOT NULL DEFAULT false,
+        "notes"       TEXT,
+        "tags"        TEXT[]  NOT NULL DEFAULT '{}',
+        "syncEnabled" BOOLEAN NOT NULL DEFAULT true,
+        "createdAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt"   TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Contact_pkey" PRIMARY KEY ("id")
+      )
+    `)
+    await exec(`CREATE UNIQUE INDEX IF NOT EXISTS "Contact_tenantId_chatJid_key" ON "Contact"("tenantId", "chatJid")`)
+    await exec(`CREATE INDEX IF NOT EXISTS "Contact_tenantId_idx" ON "Contact"("tenantId")`)
+    await exec(`CREATE INDEX IF NOT EXISTS "Contact_tenantId_syncEnabled_idx" ON "Contact"("tenantId", "syncEnabled")`)
+    await exec(`
+      DO $$ BEGIN
+        ALTER TABLE "Contact" ADD CONSTRAINT "Contact_tenantId_fkey"
+          FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    `)
+
     console.log("[instrumentation] DB schema up to date")
   } catch (err) {
     console.error("[instrumentation] schema migration error:", err)
