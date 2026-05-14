@@ -37,22 +37,29 @@ export async function POST(req: NextRequest) {
 
     const tenantId = session.user.tenantId
 
+    // Validar conversationId si vino: si no existe en DB (cliente con state stale),
+    // lo ignoramos y dejamos que chatStream cree una conversación nueva.
+    // Si existe pero es de otro tenant, sí cortamos por seguridad.
+    let validConversationId: string | undefined = conversationId
     if (conversationId) {
       const conv = await db.conversation.findUnique({
         where: { id: conversationId },
         select: { tenantId: true },
       })
-      if (!conv) return NextResponse.json({ error: "No encontrada" }, { status: 404 })
-      if (conv.tenantId !== tenantId) return NextResponse.json({ error: "Acceso denegado" }, { status: 403 })
+      if (!conv) {
+        validConversationId = undefined
+      } else if (conv.tenantId !== tenantId) {
+        return NextResponse.json({ error: "Acceso denegado" }, { status: 403 })
+      }
     }
 
     // Cargar historial
     let history: ChatInput[] = []
-    if (conversationId) {
+    if (validConversationId) {
       // Memoria por chat: últimos N mensajes del chat con KITT, en orden cronológico.
       // Los mensajes de WhatsApp van a su propia tabla (WhatsappMessage) y no se mezclan acá.
       const recent = await db.message.findMany({
-        where: { conversationId },
+        where: { conversationId: validConversationId },
         orderBy: { createdAt: "desc" },
         take: MAX_HISTORY_MESSAGES,
       })
@@ -83,11 +90,11 @@ export async function POST(req: NextRequest) {
 
     // Detección de confirmación conversacional: si el usuario dice "sí/dale/ok/enviar"
     // y hay acciones pendientes del último mensaje del asistente, ejecutarlas directamente.
-    if (conversationId) {
+    if (validConversationId) {
       const confirmWords = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo)?|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda)\b/i
       if (confirmWords.test(message.trim())) {
         const lastAssistant = await db.message.findFirst({
-          where: { conversationId, role: "assistant" },
+          where: { conversationId: validConversationId, role: "assistant" },
           orderBy: { createdAt: "desc" },
           select: { metadata: true },
         })
@@ -132,7 +139,7 @@ export async function POST(req: NextRequest) {
           const quickStream = new ReadableStream({
             start(ctrl) {
               ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "text", text: replyText })}\n\n`))
-              ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "done", conversationId })}\n\n`))
+              ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "done", conversationId: validConversationId })}\n\n`))
               ctrl.close()
             }
           })
@@ -163,7 +170,7 @@ export async function POST(req: NextRequest) {
           await chatStream(
             history,
             tenantId,
-            conversationId ?? null,
+            validConversationId ?? null,
             (chunk) => {
               if (chunk.type === "text") finalMessage += chunk.text
               else if (chunk.type === "artifact") artifact = chunk.artifact
