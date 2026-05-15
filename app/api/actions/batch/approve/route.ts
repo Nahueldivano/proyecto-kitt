@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
         await db.pendingAction.update({
           where: { id },
-          data: { status: "approved" },
+          data: { status: "approved", executedAt: new Date() },
         })
         results.push({ id, status: "approved" })
       } catch (err) {
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         results.push({ id, status: "error", error: userMsg })
         await db.pendingAction.update({
           where: { id },
-          data: { status: "failed" },
+          data: { status: "failed", errorMessage: userMsg, executedAt: new Date() },
         }).catch(() => {})
       }
     }

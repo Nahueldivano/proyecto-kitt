@@ -231,6 +231,8 @@ export async function register() {
       )
     `)
     await exec(`CREATE INDEX IF NOT EXISTS "PendingAction_tenantId_status_idx" ON "PendingAction"("tenantId", "status")`)
+    await exec(`ALTER TABLE "PendingAction" ADD COLUMN IF NOT EXISTS "errorMessage" TEXT`)
+    await exec(`ALTER TABLE "PendingAction" ADD COLUMN IF NOT EXISTS "executedAt"   TIMESTAMP(3)`)
     await exec(`
       DO $$ BEGIN
         ALTER TABLE "PendingAction" ADD CONSTRAINT "PendingAction_tenantId_fkey"

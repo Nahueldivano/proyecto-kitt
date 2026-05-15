@@ -69,7 +69,7 @@ export async function POST(
       const friendly = friendlyError(raw, action.type)
       await db.pendingAction.update({
         where: { id },
-        data: { status: "failed" },
+        data: { status: "failed", errorMessage: friendly, executedAt: new Date() },
       }).catch(() => {})
       console.error("[actions/retry] exec error:", raw)
       return NextResponse.json({ error: friendly }, { status: 500 })
@@ -77,7 +77,7 @@ export async function POST(
 
     await db.pendingAction.update({
       where: { id },
-      data: { status: "approved" },
+      data: { status: "approved", errorMessage: null, executedAt: new Date() },
     })
     return NextResponse.json({ success: true })
   } catch (error) {
