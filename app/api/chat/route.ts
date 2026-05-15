@@ -151,6 +151,35 @@ export async function POST(req: NextRequest) {
             headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" },
           })
         }
+
+        // Hay palabras de confirmación pero no hay pending en el último mensaje.
+        // Buscar si hay pending del tenant para informarle al usuario cuáles quedaron.
+        const allPending = await db.pendingAction.findMany({
+          where: { tenantId, status: "pending" },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, type: true, payload: true },
+        })
+        if (allPending.length > 0) {
+          const lista = allPending.map((a, i) => {
+            const p = a.payload as Record<string, string>
+            const dest = p.to ?? p.subject ?? "?"
+            const tipo = a.type === "send_whatsapp_message" ? "WhatsApp" : "Email"
+            const texto = p.message ?? p.body ?? ""
+            return `${i + 1}. ${tipo} a ${dest}: "${String(texto).substring(0, 60)}${texto.length > 60 ? "…" : ""}"`
+          }).join("\n")
+          const replyText = `Quedaron estos mensajes pendientes:\n\n${lista}\n\n¿Cuál querés que mande?`
+          const encoder2 = new TextEncoder()
+          const quickStream = new ReadableStream({
+            start(ctrl) {
+              ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "text", text: replyText })}\n\n`))
+              ctrl.enqueue(encoder2.encode(`data: ${JSON.stringify({ type: "done", conversationId: validConversationId })}\n\n`))
+              ctrl.close()
+            }
+          })
+          return new Response(quickStream, {
+            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive", "X-Accel-Buffering": "no" },
+          })
+        }
       }
     }
 
