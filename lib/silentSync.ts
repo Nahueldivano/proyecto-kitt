@@ -19,10 +19,13 @@ export async function silentSync(tenantId: string): Promise<void> {
   // Auto-guardar contactos nuevos detectados (silencioso, no bloquea)
   for (const [jid, name] of contactsMap.entries()) {
     if (!jid.includes("@") || jid.endsWith("@g.us")) continue
-    const phone = jid.replace(/@.+$/, "")
-    db.contact.findFirst({ where: { tenantId, OR: [{ chatJid: jid }, { phone }] }, select: { id: true } })
+    const isLid = jid.endsWith("@lid") || jid.endsWith("@c.us")
+    const rawPhone = isLid ? null : jid.replace(/@.+$/, "")
+    // No guardar como phone si tiene >13 dígitos (es un lid disfrazado como @s.whatsapp.net)
+    const phone = rawPhone && rawPhone.length <= 13 ? rawPhone : null
+    db.contact.findFirst({ where: { tenantId, OR: [{ chatJid: jid }, ...(phone ? [{ phone }] : [])] }, select: { id: true } })
       .then(existing => {
-        if (!existing) db.contact.create({ data: { tenantId, chatJid: jid, name, phone, isGroup: false, tags: [], syncEnabled: true } }).catch(() => {})
+        if (!existing) db.contact.create({ data: { tenantId, chatJid: jid, name, phone: phone ?? null, isGroup: false, tags: [], syncEnabled: true } }).catch(() => {})
       }).catch(() => {})
   }
   for (const [jid, name] of groupNamesMap.entries()) {

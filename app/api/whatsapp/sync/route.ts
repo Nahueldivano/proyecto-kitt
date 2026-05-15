@@ -298,10 +298,7 @@ export async function POST(req: NextRequest) {
         chatName: string | null
       }>>(`
         SELECT
-          CASE
-            WHEN "chatJid" LIKE '%@g.us' THEN "chatJid"
-            ELSE regexp_replace("chatJid", '@.+$', '') || '@s.whatsapp.net'
-          END AS "chatJid",
+          "chatJid",
           (ARRAY_AGG("contactName" ORDER BY "timestamp" DESC) FILTER (WHERE "contactName" IS NOT NULL AND "fromMe" = false))[1] AS "contactName",
           (ARRAY_AGG("chatName" ORDER BY "timestamp" DESC) FILTER (WHERE "chatName" IS NOT NULL))[1] AS "chatName"
         FROM "WhatsappMessage"
@@ -314,8 +311,10 @@ export async function POST(req: NextRequest) {
         if (!row.chatJid?.includes("@")) continue
         const isGroup = row.chatJid.endsWith("@g.us")
         const isLid = row.chatJid.endsWith("@lid") || row.chatJid.endsWith("@c.us")
-        // Para @lid: no guardar el phone (es un ID interno, no un número de teléfono)
-        const phone = (isGroup || isLid) ? null : row.chatJid.replace(/@.+$/, "")
+        // Para @lid y grupos: no guardar phone (no es un número de teléfono real)
+        // Para @s.whatsapp.net: el número puede seguir siendo un lid disfrazado si tiene >13 dígitos
+        const rawPhone = (!isGroup && !isLid) ? row.chatJid.replace(/@.+$/, "") : null
+        const phone = rawPhone && rawPhone.length <= 13 ? rawPhone : null
         const bestName = row.chatName ?? row.contactName ?? null
 
         // Solo crear si tiene nombre real (no solo número)
