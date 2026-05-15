@@ -88,14 +88,16 @@ export async function POST(req: NextRequest) {
     }
     history.push({ role: "user", content: userContent })
 
-    // Confirmación conversacional: el usuario dice "sí/dale/mandalo/etc" y hay acciones pendientes.
-    // Busca primero en el último mensaje del asistente, y si no hay, en todos los pending del tenant.
+    // Confirmación conversacional: el usuario dice "sí/dale/mandalo/sí manda/etc"
+    // SOLO cuando el mensaje es exclusivamente una confirmación — no contiene destinatario ni instrucción nueva.
+    // "mandale a mamá" NO es confirmación — es instrucción nueva → pasa a Claude.
     if (validConversationId) {
-      const confirmWords = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo|los|las|les)?|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda|todos?|a todos?|a todas?)\b/i
+      const confirmWords = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo|los|las|les)|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda|todos?|a todos?|a todas?)$/i
       if (confirmWords.test(message.trim())) {
         const pendingIds: string[] = []
 
-        // 1. Buscar en metadata del último mensaje del asistente
+        // Buscar SOLO en metadata del último mensaje del asistente — no en todos los pending del tenant.
+        // Si el último mensaje no tenía acciones, el usuario está diciendo otra cosa.
         const lastAssistant = await db.message.findFirst({
           where: { conversationId: validConversationId, role: "assistant" },
           orderBy: { createdAt: "desc" },
@@ -107,16 +109,6 @@ export async function POST(req: NextRequest) {
           for (const t of meta.batchTasks as Array<{ id: string }>) {
             if (t.id) pendingIds.push(t.id)
           }
-        }
-
-        // 2. Si no hay en el último mensaje, buscar todos los pending del tenant
-        if (pendingIds.length === 0) {
-          const allPending = await db.pendingAction.findMany({
-            where: { tenantId, status: "pending" },
-            orderBy: { createdAt: "asc" },
-            select: { id: true },
-          })
-          for (const a of allPending) pendingIds.push(a.id)
         }
 
         if (pendingIds.length > 0) {
