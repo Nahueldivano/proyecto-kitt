@@ -122,13 +122,20 @@ export async function POST(req: NextRequest) {
         await db.contact.update({ where: { id: existing.id }, data: { phone } })
       }
       // Enriquecer @lid con phone real: buscar Contact con mismo nombre sin phone
+      // y migrar sus mensajes al JID real para que quede un solo chat
       if (phone) {
+        const realJid = `${phone}@s.whatsapp.net`
         const lidContact = await db.contact.findFirst({
           where: { tenantId, phone: null, name, isGroup: false },
           select: { id: true, chatJid: true },
         })
         if (lidContact && (lidContact.chatJid.endsWith("@lid") || lidContact.chatJid.endsWith("@c.us"))) {
-          await db.contact.update({ where: { id: lidContact.id }, data: { phone } })
+          await db.contact.update({ where: { id: lidContact.id }, data: { phone, chatJid: realJid } }).catch(() => {})
+          // Migrar mensajes del @lid al JID real
+          await db.$executeRawUnsafe(
+            `UPDATE "WhatsappMessage" SET "chatJid" = $1 WHERE "tenantId" = $2 AND "chatJid" = $3`,
+            realJid, tenantId, lidContact.chatJid
+          ).catch(() => {})
         }
       }
     } catch { /* ignorar duplicados */ }

@@ -39,14 +39,22 @@ export async function silentSync(tenantId: string): Promise<void> {
       }).catch(() => {})
 
     // Si el JID de agenda es @s.whatsapp.net con phone real, buscar también si hay un Contact
-    // guardado con @lid que corresponda al mismo contacto (mismo nombre en pushName) y enriquecerlo.
+    // guardado con @lid que corresponda al mismo contacto (mismo nombre) y enriquecerlo.
+    // Además migrar los mensajes de WhatsappMessage del @lid al JID real.
     if (phone) {
       db.contact.findFirst({
         where: { tenantId, phone: null, name, isGroup: false },
         select: { id: true, chatJid: true },
       }).then(lidContact => {
         if (lidContact && (lidContact.chatJid.endsWith("@lid") || lidContact.chatJid.endsWith("@c.us"))) {
-          db.contact.update({ where: { id: lidContact.id }, data: { phone } }).catch(() => {})
+          const realJid = `${phone}@s.whatsapp.net`
+          // Actualizar el Contact con el phone y el JID real
+          db.contact.update({ where: { id: lidContact.id }, data: { phone, chatJid: realJid } }).catch(() => {})
+          // Migrar mensajes del @lid al JID real para que el normalizador los encuentre
+          db.$executeRawUnsafe(
+            `UPDATE "WhatsappMessage" SET "chatJid" = $1 WHERE "tenantId" = $2 AND "chatJid" = $3`,
+            realJid, tenantId, lidContact.chatJid
+          ).catch(() => {})
         }
       }).catch(() => {})
     }

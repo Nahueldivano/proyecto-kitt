@@ -88,19 +88,20 @@ export async function POST(req: NextRequest) {
     }
     history.push({ role: "user", content: userContent })
 
-    // Detección de confirmación conversacional: si el usuario dice "sí/dale/ok/enviar"
-    // y hay acciones pendientes del último mensaje del asistente, ejecutarlas directamente.
+    // Confirmación conversacional: el usuario dice "sí/dale/mandalo/etc" y hay acciones pendientes.
+    // Busca primero en el último mensaje del asistente, y si no hay, en todos los pending del tenant.
     if (validConversationId) {
-      const confirmWords = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo)?|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda)\b/i
+      const confirmWords = /^(s[ií]|dale|ok|okay|adelante|enviar?|manda(lo|los|las|les)?|confirmar?|perfecto|listo|va|bueno|claro|sí envía|sí manda|todos?|a todos?|a todas?)\b/i
       if (confirmWords.test(message.trim())) {
+        const pendingIds: string[] = []
+
+        // 1. Buscar en metadata del último mensaje del asistente
         const lastAssistant = await db.message.findFirst({
           where: { conversationId: validConversationId, role: "assistant" },
           orderBy: { createdAt: "desc" },
           select: { metadata: true },
         })
         const meta = (lastAssistant?.metadata ?? {}) as Record<string, unknown>
-        const pendingIds: string[] = []
-
         if (meta.pendingActionId) pendingIds.push(String(meta.pendingActionId))
         if (meta.batchTasks && Array.isArray(meta.batchTasks)) {
           for (const t of meta.batchTasks as Array<{ id: string }>) {
@@ -108,32 +109,43 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // 2. Si no hay en el último mensaje, buscar todos los pending del tenant
+        if (pendingIds.length === 0) {
+          const allPending = await db.pendingAction.findMany({
+            where: { tenantId, status: "pending" },
+            orderBy: { createdAt: "asc" },
+            select: { id: true },
+          })
+          for (const a of allPending) pendingIds.push(a.id)
+        }
+
         if (pendingIds.length > 0) {
-          // Ejecutar las acciones pendientes
           const { sendEmail, replyToEmail } = await import("@/lib/gmail")
           const { sendTextMessage } = await import("@/lib/evolution")
-          const results: string[] = []
+          const results: Array<{ ok: boolean; label: string }> = []
 
           for (const id of pendingIds) {
             try {
               const action = await db.pendingAction.findUnique({ where: { id } })
               if (!action || action.tenantId !== tenantId || action.status !== "pending") continue
               const p = action.payload as Record<string, string>
+              let label = p.to ?? ""
               if (action.type === "send_whatsapp_message") await sendTextMessage(tenantId, p.to, p.message)
-              else if (action.type === "send_email") await sendEmail(tenantId, p.to, p.subject, p.body)
-              else if (action.type === "reply_email") await replyToEmail(tenantId, p.threadId, p.to, p.subject, p.body)
-              await db.pendingAction.update({ where: { id }, data: { status: "approved" } })
-              results.push("ok")
-            } catch {
-              results.push("error")
+              else if (action.type === "send_email") { await sendEmail(tenantId, p.to, p.subject, p.body); label = p.to }
+              else if (action.type === "reply_email") { await replyToEmail(tenantId, p.threadId, p.to, p.subject, p.body); label = p.to }
+              await db.pendingAction.update({ where: { id }, data: { status: "approved", executedAt: new Date() } })
+              results.push({ ok: true, label })
+            } catch (err) {
+              const raw = err instanceof Error ? err.message : String(err)
+              results.push({ ok: false, label: raw })
             }
           }
 
-          const sent = results.filter((r) => r === "ok").length
-          const failed = results.filter((r) => r === "error").length
-          const replyText = failed === 0
+          const sent = results.filter((r) => r.ok).length
+          const failed = results.filter((r) => !r.ok)
+          const replyText = failed.length === 0
             ? `Listo, ${sent === 1 ? "mensaje enviado" : `${sent} mensajes enviados`}.`
-            : `${sent} enviado${sent !== 1 ? "s" : ""}, ${failed} no se pudo${failed !== 1 ? "n" : ""} enviar.`
+            : `${sent} enviado${sent !== 1 ? "s" : ""}. No se pudo${failed.length !== 1 ? "n" : ""} enviar ${failed.length}: ${failed.map(f => f.label).join(", ")}.`
 
           const encoder2 = new TextEncoder()
           const quickStream = new ReadableStream({
