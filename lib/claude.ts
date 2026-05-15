@@ -361,6 +361,21 @@ async function executeTool(
         ? `HAVING MAX("timestamp") >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
         : ""
 
+      // Cargar tabla Contact para resolver @lid → phone real antes de agrupar
+      const contactPhoneMap = await db.$queryRawUnsafe<Array<{ chatJid: string; phone: string | null }>>(`
+        SELECT "chatJid", "phone" FROM "Contact" WHERE "tenantId" = $1
+      `, tenantId).catch(() => [] as Array<{ chatJid: string; phone: string | null }>)
+
+      // Mapa: cualquier variante de JID → phone canónico (para colapsar @lid + @s.whatsapp.net del mismo contacto)
+      const jidToPhone = new Map<string, string>()
+      for (const c of contactPhoneMap as Array<{ chatJid: string; phone: string | null }>) {
+        if (c.phone) {
+          jidToPhone.set(c.chatJid, c.phone)
+          const stripped = c.chatJid.replace(/@.+$/, "")
+          if (stripped) jidToPhone.set(stripped, c.phone)
+        }
+      }
+
       const rows = await db.$queryRawUnsafe<Array<{
         chatJid: string
         chatName: string | null
@@ -397,7 +412,35 @@ async function executeTool(
         LIMIT $2
       `, tenantId, limit)
 
-      if (rows.length === 0) {
+      // Colapsar filas del mismo contacto: @lid y @s.whatsapp.net con mismo phone → una sola entrada
+      const collapsed = new Map<string, typeof rows[0]>()
+      for (const row of rows) {
+        const phone = row.chatJid.replace(/@.+$/, "")
+        const realPhone = jidToPhone.get(row.chatJid) ?? jidToPhone.get(phone) ?? phone
+        const key = row.chatJid.endsWith("@g.us") ? row.chatJid : `${realPhone}@s.whatsapp.net`
+
+        const existing = collapsed.get(key)
+        if (!existing) {
+          // Usar el JID real (@s.whatsapp.net con phone real) si lo tenemos
+          collapsed.set(key, { ...row, chatJid: key })
+        } else {
+          // Fusionar: sumar mensajes, quedarse con el más reciente
+          const mergedTs = existing.lastTs > row.lastTs ? existing.lastTs : row.lastTs
+          const mergedBody = existing.lastTs >= row.lastTs ? existing.lastBody : row.lastBody
+          const mergedFromMe = existing.lastTs >= row.lastTs ? existing.lastFromMe : row.lastFromMe
+          collapsed.set(key, {
+            ...existing,
+            messageCount: BigInt(Number(existing.messageCount) + Number(row.messageCount)),
+            lastTs: mergedTs,
+            lastBody: mergedBody,
+            lastFromMe: mergedFromMe,
+            contactName: existing.contactName ?? row.contactName,
+          })
+        }
+      }
+      const dedupedRows = [...collapsed.values()].sort((a, b) => b.lastTs.getTime() - a.lastTs.getTime()).slice(0, limit)
+
+      if (dedupedRows.length === 0) {
         return {
           toolResult: "No hay chats de WhatsApp sincronizados aún. El usuario puede sincronizar desde Configuración → Conexiones → Sincronizar WhatsApp.",
         }
@@ -414,7 +457,7 @@ async function executeTool(
         if (c.phone) contactNameMap.set(c.phone, c.name)
       }
 
-      const formatted = rows.map((r, i) => {
+      const formatted = dedupedRows.map((r, i) => {
         const phone = r.chatJid.replace(/@.+$/, "")
         const name = contactNameMap.get(r.chatJid) ?? contactNameMap.get(phone)
           ?? r.chatName ?? r.contactName ?? r.chatJid
@@ -423,7 +466,7 @@ async function executeTool(
         return `${i + 1}. ${name} [${r.chatJid}] — ${Number(r.messageCount)} msgs — ${ts}\n   ${dir} ${String(r.lastBody).substring(0, 80)}`
       }).join("\n\n")
 
-      return { toolResult: `Chats de WhatsApp (${rows.length}):\n\n${formatted}` }
+      return { toolResult: `Chats de WhatsApp (${dedupedRows.length}):\n\n${formatted}` }
     }
 
     case "read_whatsapp_chat": {
