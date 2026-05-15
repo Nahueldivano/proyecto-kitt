@@ -101,17 +101,35 @@ export async function POST(req: NextRequest) {
   ])
   diagnostics.push(`contacts loaded: ${contactsMap.size}, groups: ${groupNamesMap.size}`)
 
-  // Auto-guardar contactos en tabla Contact (upsert — nunca sobreescribe nombres editados por el usuario)
+  // Auto-guardar contactos en tabla Contact y enriquecer phones de @lid existentes.
+  // contactsMap viene de findContacts (agenda del teléfono) — tiene JIDs reales @s.whatsapp.net
+  // con números de teléfono reales. Los @lid de mensajes se cruzan por nombre para obtener el phone.
   let contactsAutoSaved = 0
-  // 1:1 contacts desde Evolution agenda
   for (const [jid, name] of contactsMap.entries()) {
     if (!jid.includes("@") || jid.endsWith("@g.us")) continue
-    const phone = jid.replace(/@.+$/, "")
+    const isLid = jid.endsWith("@lid") || jid.endsWith("@c.us")
+    const rawPhone = isLid ? null : jid.replace(/@.+$/, "")
+    const phone = rawPhone && rawPhone.length <= 13 ? rawPhone : null
     try {
-      const existing = await db.contact.findFirst({ where: { tenantId, OR: [{ chatJid: jid }, { phone }] }, select: { id: true } })
+      const existing = await db.contact.findFirst({
+        where: { tenantId, OR: [{ chatJid: jid }, ...(phone ? [{ phone }] : [])] },
+        select: { id: true, phone: true },
+      })
       if (!existing) {
         await db.contact.create({ data: { tenantId, chatJid: jid, name, phone, isGroup: false, tags: [], syncEnabled: true } })
         contactsAutoSaved++
+      } else if (phone && !existing.phone) {
+        await db.contact.update({ where: { id: existing.id }, data: { phone } })
+      }
+      // Enriquecer @lid con phone real: buscar Contact con mismo nombre sin phone
+      if (phone) {
+        const lidContact = await db.contact.findFirst({
+          where: { tenantId, phone: null, name, isGroup: false },
+          select: { id: true, chatJid: true },
+        })
+        if (lidContact && (lidContact.chatJid.endsWith("@lid") || lidContact.chatJid.endsWith("@c.us"))) {
+          await db.contact.update({ where: { id: lidContact.id }, data: { phone } })
+        }
       }
     } catch { /* ignorar duplicados */ }
   }

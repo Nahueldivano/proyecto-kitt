@@ -273,6 +273,16 @@ async function executeTool(
   toolInput: Record<string, unknown>,
   tenantId: string
 ): Promise<ToolCallResult> {
+  // Sync pasivo en background antes de cualquier lectura de WhatsApp.
+  // No bloquea — equivale al botón "Sincronizar chats" de Settings.
+  if (
+    toolName === "list_whatsapp_chats" ||
+    toolName === "read_whatsapp_chat" ||
+    toolName === "search_whatsapp_messages"
+  ) {
+    import("@/lib/silentSync").then(({ silentSync }) => silentSync(tenantId)).catch(() => {})
+  }
+
   switch (toolName) {
     case "list_unread_emails": {
       const maxResults = (toolInput.max_results as number) ?? 10
