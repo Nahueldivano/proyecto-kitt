@@ -7,6 +7,9 @@ import { sendTextMessage } from "@/lib/evolution"
 // Convierte errores técnicos de Evolution/Gmail en mensajes legibles para el usuario
 function friendlyError(raw: string, type: string): string {
   if (type === "send_whatsapp_message") {
+    if (raw.includes("resolver el número") || raw.includes("sincronizar")) {
+      return raw
+    }
     if (raw.includes("exists\":false") || raw.includes("400")) {
       return "No se pudo enviar el mensaje. El contacto no está disponible en WhatsApp o el número es incorrecto."
     }
