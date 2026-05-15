@@ -41,30 +41,39 @@ export async function resolveWhatsAppRecipient(
   const phone = digitsOnly(stripped)
 
   if (hasLidSuffix || looksLikeLid(phone)) {
-    // Buscar en Contact por cualquier variante del JID
-    const contact = await db.contact.findFirst({
+    // Buscar en Contact todas las variantes posibles del mismo contacto:
+    // - chatJid exacto (ej: 25683921248357@lid)
+    // - chatJid con @s.whatsapp.net (ej: 25683921248357@s.whatsapp.net)
+    // - phone exacto (ej: 5491157589161)
+    // Traemos todos los matches y elegimos el que tenga phone real
+    const contacts = await db.contact.findMany({
       where: {
         tenantId,
-        OR: [{ chatJid: input }, { chatJid: `${phone}@s.whatsapp.net` }, { phone }],
+        OR: [
+          { chatJid: input },
+          { chatJid: `${phone}@s.whatsapp.net` },
+          { chatJid: `${phone}@lid` },
+          { phone },
+        ],
       },
       select: { phone: true, chatJid: true },
-    }).catch(() => null)
+    }).catch(() => [] as Array<{ phone: string | null; chatJid: string }>)
 
-    // Si el contact tiene phone real (no lid), usarlo
-    const contactPhone = contact?.phone ? digitsOnly(contact.phone) : null
-    if (contactPhone && !looksLikeLid(contactPhone)) {
-      console.log(`[wa-recipient] input=${input} resolved=${contactPhone} source=contact`)
-      return { number: contactPhone, isGroup: false, source: "contact" }
+    // Prioridad: phone real ≤13 dígitos > chatJid @s.whatsapp.net con número real
+    for (const contact of contacts) {
+      const contactPhone = contact.phone ? digitsOnly(contact.phone) : null
+      if (contactPhone && !looksLikeLid(contactPhone)) {
+        console.log(`[wa-recipient] input=${input} resolved=${contactPhone} source=contact`)
+        return { number: contactPhone, isGroup: false, source: "contact" }
+      }
     }
-
-    // Si el contact tiene chatJid con @s.whatsapp.net y el número no es lid,
-    // Evolution puede manejarlo directamente con el JID completo
-    const contactJid = contact?.chatJid
-    if (contactJid && contactJid.endsWith("@s.whatsapp.net")) {
-      const jidPhone = digitsOnly(stripSuffix(contactJid))
-      if (!looksLikeLid(jidPhone)) {
-        console.log(`[wa-recipient] input=${input} resolved=${jidPhone} source=contact-jid`)
-        return { number: jidPhone, isGroup: false, source: "contact" }
+    for (const contact of contacts) {
+      if (contact.chatJid.endsWith("@s.whatsapp.net")) {
+        const jidPhone = digitsOnly(stripSuffix(contact.chatJid))
+        if (!looksLikeLid(jidPhone)) {
+          console.log(`[wa-recipient] input=${input} resolved=${jidPhone} source=contact-jid`)
+          return { number: jidPhone, isGroup: false, source: "contact" }
+        }
       }
     }
 
