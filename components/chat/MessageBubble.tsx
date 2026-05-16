@@ -61,10 +61,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     return (
       <div className="flex justify-end">
         <div className="max-w-[80%] md:max-w-[60%]">
-          <div className="bg-[hsl(var(--accent))] text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm">
+          <div className="bg-[hsl(var(--accent))] text-white rounded-2xl rounded-tr-md px-4 py-3 text-sm leading-relaxed shadow-sm">
             {message.content}
           </div>
-          <p className="text-[10px] text-[hsl(var(--text-3))] mt-1 text-right">
+          <p className="text-[9px] text-[hsl(var(--text-3))] mt-1 text-right tracking-wide">
             {formatRelativeDate(message.createdAt)}
           </p>
         </div>
@@ -86,15 +86,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   } | undefined
 
   return (
-    <div className="flex gap-2.5">
+    <div className="flex gap-3">
       {/* Avatar KITT */}
-      <div className="h-7 w-7 rounded-full bg-[hsl(var(--surface-2))] flex items-center justify-center flex-shrink-0 mt-1">
-        <span className="text-[hsl(var(--accent))] text-xs font-bold">K</span>
+      <div className="h-7 w-7 rounded-full bg-gradient-to-br from-[hsl(var(--accent))] to-[hsl(238,70%,50%)] flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+        <span className="text-white text-[11px] font-bold tracking-tight">K</span>
       </div>
 
       <div className="flex-1 max-w-[80%] md:max-w-[70%]">
         {text && (
-          <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm text-[hsl(var(--text))]">
+          <div className="bg-[hsl(var(--surface))] border border-[hsl(var(--border))] rounded-2xl rounded-tl-md px-4 py-3 text-sm text-[hsl(var(--text))] leading-relaxed shadow-sm">
             <p className="whitespace-pre-wrap">{text}</p>
           </div>
         )}
@@ -127,7 +127,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           />
         )}
 
-        <p className="text-[10px] text-[hsl(var(--text-3))] mt-1 ml-1">
+        <p className="text-[9px] text-[hsl(var(--text-3))] mt-1 ml-1 tracking-wide">
           {formatRelativeDate(message.createdAt)}
         </p>
       </div>

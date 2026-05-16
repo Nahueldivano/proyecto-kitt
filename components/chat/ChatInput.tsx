@@ -138,7 +138,7 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
       {/* ── MOBILE layout ── */}
       <div className="md:hidden max-w-3xl mx-auto space-y-2">
         {/* Input pill — sin toolbar dentro, limpio como Claude */}
-        <div className="rounded-2xl border border-[hsl(var(--border-2))] bg-[hsl(var(--surface))] focus-within:ring-2 focus-within:ring-[hsl(var(--accent))] focus-within:border-[hsl(var(--accent))] transition-all">
+        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] focus-within:ring-2 focus-within:ring-[hsl(var(--accent)/0.3)] focus-within:border-[hsl(var(--accent))] shadow-sm transition-all duration-150">
           <textarea
             ref={textareaRef}
             value={value}
@@ -182,17 +182,17 @@ export function ChatInput({ onSend, onCancel, disabled = false, isStreaming = fa
       <div className="hidden md:block max-w-3xl mx-auto">
         {/* Chips de acciones rápidas */}
         {!isStreaming && !disabled && messages.length === 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {QUICK_ACTIONS.map((a) => (
               <button key={a.label} onClick={() => onSend(a.prompt)}
-                className="text-xs px-3 py-1.5 rounded-full border border-[hsl(var(--border-2))] text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))] transition-colors">
+                className="text-xs px-3 py-1.5 rounded-full border border-[hsl(var(--border))] text-[hsl(var(--text-3))] hover:border-[hsl(var(--accent))] hover:text-[hsl(var(--accent))] hover:bg-[hsl(var(--accent-soft))] transition-all duration-150 font-medium tracking-[-0.01em]">
                 {a.label}
               </button>
             ))}
           </div>
         )}
 
-        <div className="relative rounded-2xl border border-[hsl(var(--border-2))] bg-[hsl(var(--background))] focus-within:ring-2 focus-within:ring-[hsl(var(--accent))] focus-within:border-[hsl(var(--accent))] transition-all">
+        <div className="relative rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--surface))] focus-within:ring-2 focus-within:ring-[hsl(var(--accent)/0.3)] focus-within:border-[hsl(var(--accent))] shadow-sm transition-all duration-150">
           <textarea
             ref={textareaRef}
             value={value}

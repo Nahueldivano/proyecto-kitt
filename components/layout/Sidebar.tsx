@@ -222,13 +222,13 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
 
   return (
     <>
-      <aside className="hidden md:flex flex-col w-64 border-r border-[hsl(var(--border))] bg-[hsl(var(--background))] h-full overflow-hidden">
+      <aside className="hidden md:flex flex-col w-[248px] border-r border-[hsl(var(--border))] bg-[hsl(var(--background))] h-full overflow-hidden">
 
         {/* ── TOP: Logo + Nuevo chat + colapsar ── */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <div className="flex items-center gap-2.5">
-            <Image src="/kitt-logo.png" alt="KITT" width={32} height={26} className="object-contain" />
-            <span className="text-sm font-semibold text-[hsl(var(--text))] tracking-tight">KITT</span>
+          <div className="flex items-center gap-2">
+            <Image src="/kitt-logo.png" alt="KITT" width={28} height={23} className="object-contain" />
+            <span className="text-sm font-semibold text-[hsl(var(--text))] tracking-[-0.03em]">KITT</span>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -269,8 +269,8 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
                 isActive
-                  ? "bg-[hsl(var(--surface))] text-[hsl(var(--text))] font-medium"
-                  : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface))] hover:text-[hsl(var(--text))]"
+                  ? "bg-[hsl(var(--surface))] text-[hsl(var(--text))] font-medium shadow-sm"
+                  : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))]"
               )}
             >
               <span className={isActive ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--text-3))]"}>
@@ -348,7 +348,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
           {/* Recientes por fecha */}
           {groups.map((group) => (
             <div key={group.label} className="mb-1">
-              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--text-3))]">
+              <p className="px-3 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-[hsl(var(--text-3))] select-none">
                 {group.label}
               </p>
               {group.items.map((conv) => (
@@ -574,7 +574,7 @@ function ConvItem({
   return (
     <div
       className={cn(
-        "group flex items-center gap-1 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-[hsl(var(--surface-2))] transition-colors",
+        "group flex items-center gap-1 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-[hsl(var(--surface-2))] transition-all duration-150",
         indent && "ml-3"
       )}
       onClick={() => onOpen(conv.id)}
