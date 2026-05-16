@@ -84,6 +84,8 @@ function chatDisplayName(c: { chatName: string | null; contactName: string | nul
   if (c.chatJid.endsWith("@g.us") && c.chatName?.trim()) return c.chatName
   if (c.contactName?.trim()) return c.contactName
   if (c.chatJid.endsWith("@g.us")) return `Grupo ${c.chatJid.replace(/@g\.us$/, "").slice(-6)}`
+  // @lid = ID opaco de WhatsApp, no es un número de teléfono real
+  if (c.chatJid.endsWith("@lid") || c.chatJid.endsWith("@c.us")) return "Contacto sin nombre"
   return `+${c.chatJid.replace(/@.+$/, "")}`
 }
 
