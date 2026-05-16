@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from "react"
-import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 
 interface Message {
@@ -10,7 +9,6 @@ interface Message {
 }
 
 export default function OnboardingPage() {
-  const router = useRouter()
   const { update } = useSession()
 
   const [history, setHistory] = useState<Message[]>([])
@@ -91,7 +89,9 @@ export default function OnboardingPage() {
               } else if (data.type === "finalized") {
                 setIsDone(true)
                 await update({ onboardingDone: true })
-                setTimeout(() => router.push("/chat"), 1800)
+                setTimeout(() => {
+                  window.location.href = "/chat"
+                }, 1800)
               } else if (data.type === "error") {
                 setHistory((prev) => [
                   ...prev,
@@ -115,7 +115,7 @@ export default function OnboardingPage() {
         setIsLoading(false)
       }
     },
-    [router, update]
+    [update]
   )
 
   const handleSend = useCallback(() => {

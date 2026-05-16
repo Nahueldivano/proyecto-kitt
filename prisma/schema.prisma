@@ -181,6 +181,7 @@ model Contact {
   name        String   // Nombre asignado por el usuario
   phone       String?  // Número puro sin @suffix (para búsqueda)
   isGroup     Boolean  @default(false)
+  isFavorite  Boolean  @default(false)
   notes       String?
   tags        String[]
   syncEnabled Boolean  @default(true)
@@ -192,6 +193,7 @@ model Contact {
   @@unique([tenantId, chatJid])
   @@index([tenantId])
   @@index([tenantId, syncEnabled])
+  @@index([tenantId, isFavorite])
 }
 
 // =============================================================

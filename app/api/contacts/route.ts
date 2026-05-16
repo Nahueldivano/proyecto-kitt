@@ -9,7 +9,7 @@ export async function GET() {
 
   const contacts = await db.contact.findMany({
     where: { tenantId: session.user.tenantId },
-    orderBy: [{ isGroup: "asc" }, { name: "asc" }],
+    orderBy: [{ isFavorite: "desc" }, { isGroup: "asc" }, { name: "asc" }],
   })
   return NextResponse.json({ contacts })
 }

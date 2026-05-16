@@ -200,8 +200,9 @@ export async function POST(req: NextRequest) {
   if (contactsFixed > 0) diagnostics.push(`contactName fixed from agenda: ${contactsFixed} rows`)
 
   try {
-    // Traer mensajes en bloque desde Evolution — sin límite artificial
-    const allMessages = await findMessages(tenantId, { limit: 10000 })
+    // Traer mensajes desde Evolution acotado a la ventana de tiempo solicitada.
+    // findMessages paginiza y corta al pasar `since` — evita bajar 45k+ msgs cuando solo querés 7 días.
+    const allMessages = await findMessages(tenantId, { limit: 50000, sinceDate: since })
     diagnostics.push(`evolution returned ${allMessages.length} messages`)
 
     // Filtrar por ventana de tiempo

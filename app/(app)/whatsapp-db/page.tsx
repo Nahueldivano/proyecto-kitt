@@ -3,6 +3,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 
+function StarIcon({ filled, size = 18 }: { filled: boolean; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={filled ? "#f5b50a" : "none"}
+      stroke={filled ? "#f5b50a" : "currentColor"}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface ChatRow {
@@ -101,7 +119,8 @@ function WhatsAppPanel() {
   const [whitelistCount, setWhitelistCount] = useState<number>(0)
   const [savingContact, setSavingContact] = useState<string | null>(null) // chatJid en proceso
   const [editingContactName, setEditingContactName] = useState<Record<string, string>>({}) // chatJid → nombre temporal
-  const [savedContacts, setSavedContacts] = useState<Set<string>>(new Set()) // chatJids ya guardados
+  // Mapa chatJid → { id de Contact, isFavorite }. Permite togglear estrella sin re-fetch.
+  const [savedContacts, setSavedContacts] = useState<Map<string, { id: string; isFavorite: boolean }>>(new Map())
 
   const loadChats = useCallback(async () => {
     setLoading(true)
@@ -123,15 +142,45 @@ function WhatsAppPanel() {
         setWhitelistCount(Array.isArray(wl) ? wl.length : 0)
       })
       .catch(() => {})
-    // Cargar contactos ya guardados para mostrar estado en la UI
+    // Cargar contactos ya guardados para mostrar estado en la UI (mapa por chatJid con id y favorito)
     fetch("/api/contacts")
       .then((r) => r.json())
       .then((d) => {
-        const jids = new Set<string>((d.contacts ?? []).map((c: { chatJid: string }) => c.chatJid.replace(/@.+$/, "")))
-        setSavedContacts(jids)
+        const m = new Map<string, { id: string; isFavorite: boolean }>()
+        for (const c of (d.contacts ?? []) as { id: string; chatJid: string; isFavorite?: boolean }[]) {
+          m.set(c.chatJid, { id: c.id, isFavorite: !!c.isFavorite })
+        }
+        setSavedContacts(m)
       })
       .catch(() => {})
   }, [loadChats])
+
+  const isSaved = useCallback((chatJid: string) => savedContacts.has(chatJid), [savedContacts])
+
+  const onToggleFavorite = useCallback(async (chatJid: string) => {
+    const entry = savedContacts.get(chatJid)
+    if (!entry) return
+    const next = !entry.isFavorite
+    setSavedContacts(prev => {
+      const m = new Map(prev)
+      m.set(chatJid, { ...entry, isFavorite: next })
+      return m
+    })
+    try {
+      await fetch(`/api/contacts/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isFavorite: next }),
+      })
+    } catch {
+      // rollback
+      setSavedContacts(prev => {
+        const m = new Map(prev)
+        m.set(chatJid, entry)
+        return m
+      })
+    }
+  }, [savedContacts])
 
   const loadMessages = useCallback(async (chat: ChatRow) => {
     setMessagesLoading(true)
@@ -148,8 +197,7 @@ function WhatsAppPanel() {
   }, [selected, loadMessages])
 
   const onSaveContact = useCallback(async (chat: ChatRow) => {
-    const phone = chat.chatJid.replace(/@.+$/, "")
-    if (savedContacts.has(phone)) return // ya guardado
+    if (savedContacts.has(chat.chatJid)) return // ya guardado
 
     const name = editingContactName[chat.chatJid] ?? chatDisplayName(chat)
     setSavingContact(chat.chatJid)
@@ -164,7 +212,15 @@ function WhatsAppPanel() {
         }),
       })
       if (r.ok) {
-        setSavedContacts(prev => new Set([...prev, phone]))
+        const d = await r.json()
+        const created = d.contact as { id: string; isFavorite?: boolean } | undefined
+        if (created) {
+          setSavedContacts(prev => {
+            const m = new Map(prev)
+            m.set(chat.chatJid, { id: created.id, isFavorite: !!created.isFavorite })
+            return m
+          })
+        }
       }
     } catch { /* silencioso */ }
     finally { setSavingContact(null) }
@@ -371,24 +427,41 @@ function WhatsAppPanel() {
               <p className="text-xs text-[hsl(var(--text-3))]">Tocá "Re-sincronizar" para traer mensajes desde WhatsApp.</p>
             </div>
           ) : (
-            filteredChats.map((c) => (
-              <button
-                key={c.chatJid}
-                onClick={() => setSelected(c)}
-                className={`w-full text-left px-4 py-3 border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))] ${selected?.chatJid === c.chatJid ? "bg-[hsl(var(--surface))]" : ""}`}
-              >
-                <div className="flex justify-between items-baseline gap-2">
-                  <span className="text-sm font-medium text-[hsl(var(--text))] truncate">
-                    {chatDisplayName(c)}
-                  </span>
-                  <span className="text-[10px] text-[hsl(var(--text-3))] shrink-0">{fmtDate(c.lastMessageAt)}</span>
+            filteredChats.map((c) => {
+              const saved = savedContacts.get(c.chatJid)
+              return (
+                <div
+                  key={c.chatJid}
+                  className={`flex items-stretch border-b border-[hsl(var(--border))] hover:bg-[hsl(var(--surface))] ${selected?.chatJid === c.chatJid ? "bg-[hsl(var(--surface))]" : ""}`}
+                >
+                  {saved && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(c.chatJid) }}
+                      className="pl-3 pr-1 flex items-center text-[hsl(var(--text-3))] hover:text-[#f5b50a]"
+                      title={saved.isFavorite ? "Quitar de favoritos" : "Marcar como favorito"}
+                      aria-label="Favorito"
+                    >
+                      <StarIcon filled={saved.isFavorite} size={16} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelected(c)}
+                    className={`flex-1 text-left px-4 py-3 ${saved ? "pl-2" : ""}`}
+                  >
+                    <div className="flex justify-between items-baseline gap-2">
+                      <span className="text-sm font-medium text-[hsl(var(--text))] truncate">
+                        {chatDisplayName(c)}
+                      </span>
+                      <span className="text-[10px] text-[hsl(var(--text-3))] shrink-0">{fmtDate(c.lastMessageAt)}</span>
+                    </div>
+                    <div className="flex justify-between items-baseline gap-2 mt-1">
+                      <p className="text-xs text-[hsl(var(--text-2))] truncate flex-1">{c.lastMessageBody}</p>
+                      <span className="text-[10px] text-[hsl(var(--text-3))] bg-[hsl(var(--surface))] px-1.5 py-0.5 rounded shrink-0">{c.messageCount}</span>
+                    </div>
+                  </button>
                 </div>
-                <div className="flex justify-between items-baseline gap-2 mt-1">
-                  <p className="text-xs text-[hsl(var(--text-2))] truncate flex-1">{c.lastMessageBody}</p>
-                  <span className="text-[10px] text-[hsl(var(--text-3))] bg-[hsl(var(--surface))] px-1.5 py-0.5 rounded shrink-0">{c.messageCount}</span>
-                </div>
-              </button>
-            ))
+              )
+            })
           )}
         </div>
       </div>
@@ -401,7 +474,7 @@ function WhatsAppPanel() {
               <button onClick={() => setSelected(null)} className="md:hidden text-sm text-[hsl(var(--text-2))]">← Volver</button>
               <div className="flex-1 min-w-0">
                 {/* Nombre editable del contacto */}
-                {savedContacts.has(selected.chatJid.replace(/@.+$/, "")) ? (
+                {isSaved(selected.chatJid) ? (
                   <h2 className="text-sm font-semibold text-[hsl(var(--text))] truncate flex items-center gap-1.5">
                     {chatDisplayName(selected)}
                     <span className="text-[10px] text-green-500 font-normal">● guardado</span>
@@ -416,8 +489,19 @@ function WhatsAppPanel() {
                 )}
                 <p className="text-[10px] text-[hsl(var(--text-3))] truncate">{selected.chatJid} · {selected.messageCount} mensajes</p>
               </div>
+              {/* Botón favorito (solo si ya está guardado como contacto) */}
+              {isSaved(selected.chatJid) && (
+                <button
+                  onClick={() => onToggleFavorite(selected.chatJid)}
+                  className="p-1.5 rounded-lg hover:bg-[hsl(var(--surface-2))] text-[hsl(var(--text-3))] shrink-0"
+                  title={savedContacts.get(selected.chatJid)?.isFavorite ? "Quitar de favoritos" : "Marcar como favorito"}
+                  aria-label="Favorito"
+                >
+                  <StarIcon filled={!!savedContacts.get(selected.chatJid)?.isFavorite} size={20} />
+                </button>
+              )}
               {/* Botón guardar como contacto */}
-              {!savedContacts.has(selected.chatJid.replace(/@.+$/, "")) && (
+              {!isSaved(selected.chatJid) && (
                 <button
                   onClick={() => onSaveContact(selected)}
                   disabled={savingContact === selected.chatJid}

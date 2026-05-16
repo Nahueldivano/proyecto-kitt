@@ -385,39 +385,82 @@ export async function findChats(tenantId: string): Promise<EvolutionChat[]> {
     .slice(0, 200)
 }
 
-// Trae mensajes en bloque sin filtrar por chat (una sola llamada).
-// El llamador filtra por whitelist y ventana de tiempo.
-// limit controla cuántos mensajes totales pide a Evolution.
+// Trae mensajes en bloque sin filtrar por chat.
+// Evolution API v2 paginiza este endpoint: ignora `limit`, requiere `page` + `offset`
+// (offset = page size, max 500). Loopeamos páginas hasta cubrir el límite pedido,
+// agotar los datos, o pasar el corte `sinceDate` (Evolution devuelve newest-first).
+// Verificado contra Evolution v2 (mayo 2026): { messages: { total, pages, currentPage, records } }.
 export async function findMessages(
   tenantId: string,
-  options: { limit?: number } = {}
+  options: { limit?: number; sinceDate?: Date } = {}
 ): Promise<EvolutionMessage[]> {
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)
 
-  // Pedimos sin filtro de chat — Evolution devuelve los más recientes globalmente
-  const limit = options.limit ?? 1000
-  const res = await fetch(`${baseUrl}/chat/findMessages/${instanceName}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ where: {}, limit }),
-  })
+  const targetLimit = options.limit ?? 1000
+  const sinceMs = options.sinceDate?.getTime()
+  const PAGE_SIZE = 500
+  const all: EvolutionMessage[] = []
+  let page = 1
+  let stoppedBySince = false
 
-  if (!res.ok) {
-    console.warn(`[evolution] findMessages ${res.status}: ${await res.text().catch(() => "")}`)
-    return []
+  while (all.length < targetLimit) {
+    const res = await fetch(`${baseUrl}/chat/findMessages/${instanceName}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ where: {}, page, offset: PAGE_SIZE }),
+    })
+
+    if (!res.ok) {
+      console.warn(`[evolution] findMessages ${res.status} page=${page}: ${await res.text().catch(() => "")}`)
+      break
+    }
+    const data = await res.json()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msgs: any = data?.messages
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const records: any[] = Array.isArray(msgs?.records)
+      ? msgs.records
+      : Array.isArray(msgs)
+        ? msgs
+        : Array.isArray(data)
+          ? data
+          : []
+    const totalPages: number = typeof msgs?.pages === "number" ? msgs.pages : 1
+
+    if (page === 1) {
+      console.log(`[evolution] findMessages: total=${msgs?.total ?? "?"} pages=${totalPages} pageSize=${records.length} sinceDate=${options.sinceDate?.toISOString() ?? "none"}`)
+    }
+
+    if (records.length === 0) break
+
+    // Detectar página completa más vieja que sinceDate (todas las páginas siguientes serán más viejas aún)
+    let pageOldestMs = Number.MAX_SAFE_INTEGER
+    for (const r of records) {
+      const norm = normalizeEvolutionMessage(r)
+      if (norm) {
+        const ms = norm.timestamp.getTime()
+        if (ms < pageOldestMs) pageOldestMs = ms
+        // Si la fecha está dentro del rango pedido, lo incluimos
+        if (!sinceMs || ms >= sinceMs) {
+          all.push(norm)
+          if (all.length >= targetLimit) break
+        }
+      }
+    }
+
+    if (sinceMs && pageOldestMs < sinceMs) {
+      stoppedBySince = true
+      break
+    }
+    if (page >= totalPages) break
+    if (records.length < PAGE_SIZE) break
+    page++
   }
-  const data = await res.json()
 
-  // Evolution puede devolver { messages: { records: [...] } } | { messages: [...] } | [...]
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const records: any[] = Array.isArray(data)
-    ? data
-    : data?.messages?.records ?? data?.messages ?? data?.records ?? []
-
-  return records
-    .map((r) => normalizeEvolutionMessage(r))
-    .filter((m): m is EvolutionMessage => m !== null)
+  if (stoppedBySince) console.log(`[evolution] findMessages: stopped early at page ${page} (older than sinceDate)`)
+  return all
 }
 
 export async function deleteInstance(tenantId: string): Promise<void> {

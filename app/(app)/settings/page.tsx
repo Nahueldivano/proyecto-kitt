@@ -428,6 +428,17 @@ export default function SettingsPage() {
               {!hasAnthropicKey && (
                 <p className="text-xs text-amber-500 mt-2">Sin API key configurada — KITT no puede responder sin esta key.</p>
               )}
+              <HelpSteps
+                title="¿Cómo consigo mi API key de Anthropic?"
+                steps={[
+                  <>Entrá a <span className="text-[hsl(var(--accent))]">console.anthropic.com</span> y creá una cuenta gratis con tu email.</>,
+                  <>Verificá tu email y entrá al panel.</>,
+                  <>En el menú de la izquierda buscá <strong>"API Keys"</strong> y tocá <strong>"Create Key"</strong>.</>,
+                  <>Ponele un nombre cualquiera (ej: "KITT") y copiá la key que empieza con <code>sk-ant-</code>. Solo se ve una vez.</>,
+                  <>Cargá saldo en <strong>"Plans &amp; Billing"</strong>. Con USD 5–10 alcanza para arrancar.</>,
+                  <>Pegá la key acá arriba y tocá <strong>"Guardar cambios"</strong>.</>,
+                ]}
+              />
             </Section>
 
             <Section title="API Key de OpenAI (Whisper)">
@@ -452,6 +463,16 @@ export default function SettingsPage() {
                   {openaiKeyVisible ? "Ocultar" : "Ver"}
                 </Button>
               </div>
+              <HelpSteps
+                title="¿Cómo consigo mi API key de OpenAI?"
+                steps={[
+                  <>Entrá a <span className="text-[hsl(var(--accent))]">platform.openai.com</span> y creá tu cuenta.</>,
+                  <>Una vez adentro, andá a <strong>"API keys"</strong> en el menú lateral.</>,
+                  <>Tocá <strong>"Create new secret key"</strong>, ponele un nombre y copiá la key que empieza con <code>sk-</code>.</>,
+                  <>En <strong>"Billing"</strong> agregá una tarjeta y cargá USD 5 de crédito (es prepago).</>,
+                  <>Pegá la key acá arriba y guardá. Con esto KITT puede transcribir los audios que te lleguen por WhatsApp.</>,
+                ]}
+              />
             </Section>
 
             <Button onClick={() => saveConfig()} loading={saving} className="w-full">
@@ -465,6 +486,17 @@ export default function SettingsPage() {
           <div className="space-y-6">
             {/* WhatsApp */}
             <Section title="WhatsApp">
+              <HelpSteps
+                title="¿Cómo conecto mi WhatsApp?"
+                steps={[
+                  <>Tocá el botón <strong>"Conectar"</strong> acá abajo. Va a aparecer un código QR.</>,
+                  <>Abrí WhatsApp en tu celular → tocá los tres puntos arriba a la derecha → <strong>"Dispositivos vinculados"</strong>.</>,
+                  <>Tocá <strong>"Vincular un dispositivo"</strong> y escaneá el QR que aparece en KITT.</>,
+                  <>Esperá unos segundos hasta que el estado pase a <strong>"Conectado"</strong> (luz verde).</>,
+                  <>Elegí abajo cuántos días de historial querés sincronizar (recomendado: 7 días) y tocá <strong>"Sincronizar WhatsApp ahora"</strong>.</>,
+                  <>Listo. KITT ya puede leer y responder tus mensajes (siempre con tu aprobación antes de enviar nada).</>,
+                ]}
+              />
               {/* Estado + conexión */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -652,6 +684,17 @@ export default function SettingsPage() {
 
             {/* Gmail */}
             <Section title="Gmail">
+              <HelpSteps
+                title="¿Cómo conecto mi cuenta de Gmail?"
+                steps={[
+                  <>Tocá <strong>"Conectar Gmail"</strong>. Te va a llevar a la pantalla de Google.</>,
+                  <>Elegí la cuenta que querés conectar (la que usás para tu negocio).</>,
+                  <>Aceptá los permisos: leer, enviar y administrar emails. Es lo que KITT necesita para ayudarte con tu casilla.</>,
+                  <>Volvés solo a KITT y vas a ver el indicador en verde con tu email.</>,
+                  <>Abajo, en <strong>"Qué casillas y remitentes monitorear"</strong>, escribí en lenguaje natural qué emails te importan (ej: clientes, facturas, proveedores).</>,
+                  <>Tocá <strong>"Guardar configuración de monitoreo"</strong>. KITT solo va a prestarle atención a lo que vos le digas.</>,
+                ]}
+              />
               {/* Banner de éxito al volver del OAuth */}
               {searchParams.get("gmail") === "connected" && (
                 <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-500 text-sm">
@@ -851,5 +894,34 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="text-sm font-semibold text-[hsl(var(--text))]">{title}</h2>
       {children}
     </div>
+  )
+}
+
+function HelpSteps({ title, steps }: { title: string; steps: React.ReactNode[] }) {
+  return (
+    <details className="mt-3 rounded-lg border border-[hsl(var(--border-2))] bg-[hsl(var(--background))] open:bg-[hsl(var(--surface-2))] transition-colors group">
+      <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2 text-xs font-medium text-[hsl(var(--text-2))] hover:text-[hsl(var(--text))] select-none">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="transition-transform group-open:rotate-90 text-[hsl(var(--text-3))]"
+          aria-hidden="true"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span>{title}</span>
+      </summary>
+      <ol className="px-4 pb-3 pt-1 space-y-1.5 text-xs text-[hsl(var(--text-2))] leading-relaxed list-decimal list-inside">
+        {steps.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+    </details>
   )
 }

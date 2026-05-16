@@ -16,7 +16,7 @@ export async function PATCH(
     return NextResponse.json({ error: "No encontrado" }, { status: 404 })
 
   const body = await req.json()
-  const allowed = ["name", "notes", "tags", "syncEnabled"] as const
+  const allowed = ["name", "notes", "tags", "syncEnabled", "isFavorite"] as const
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: Record<string, any> = {}
   for (const k of allowed) {
