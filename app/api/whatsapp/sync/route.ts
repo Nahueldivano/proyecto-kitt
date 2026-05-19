@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         "externalId"   TEXT,
         "chatJid"      TEXT  NOT NULL,
         "contactName"  TEXT,
+        "chatName"     TEXT,
         "fromMe"       BOOLEAN NOT NULL DEFAULT false,
         "body"         TEXT  NOT NULL,
         "messageType"  TEXT  NOT NULL DEFAULT 'text',
@@ -55,6 +56,10 @@ export async function POST(req: NextRequest) {
         "createdAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "WhatsappMessage_pkey" PRIMARY KEY ("id")
       )
+    `)
+    // Agregar columna chatName a tablas existentes que no la tengan
+    await db.$executeRawUnsafe(`
+      ALTER TABLE "WhatsappMessage" ADD COLUMN IF NOT EXISTS "chatName" TEXT
     `)
     diagnostics.push("table OK")
   } catch (e) {
@@ -84,9 +89,12 @@ export async function POST(req: NextRequest) {
 
   const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { config: true } })
   const cfg = (tenant?.config ?? {}) as Record<string, unknown>
-  const configHistoryDays = Number(cfg.waHistoryDays ?? 7)
-  const historyDays = bodyData.historyDays ? Number(bodyData.historyDays) : configHistoryDays
   const whitelist: string[] = Array.isArray(cfg.waContactWhitelist) ? (cfg.waContactWhitelist as string[]) : []
+
+  // Default: 1 día (últimas 24hs). Máximo permitido: 7 días.
+  // El botón manual puede pasar historyDays; sync conversacional igual (cap = 7).
+  const requestedDays = bodyData.historyDays ? Number(bodyData.historyDays) : 1
+  const historyDays = Math.min(Math.max(requestedDays, 1), 7)
 
   const since = bodyData.since
     ? new Date(String(bodyData.since))
@@ -234,12 +242,14 @@ export async function POST(req: NextRequest) {
         if (!msg.externalId) { totalSkipped++; continue }
         try {
           const isGroup = msg.chatJid.endsWith("@g.us")
-          // En grupos: contactName = quien envió el mensaje (pushName)
-          // En 1:1: siempre el nombre de la agenda (contactsMap), nunca el pushName propio
+          const phone = msg.chatJid.replace(/@.+$/, "")
+          // En grupos: contactName = quien envió el mensaje (pushName del remitente)
+          // En 1:1: nombre de agenda (por JID o por número), luego pushName si no es mensaje propio
           const contactName = isGroup
             ? (msg.contactName ?? null)
-            : (contactsMap.get(msg.chatJid) ?? (!msg.fromMe ? msg.contactName : null) ?? null)
-          const chatName = isGroup ? (groupNamesMap.get(msg.chatJid) ?? null) : null
+            : (contactsMap.get(msg.chatJid) ?? contactsMap.get(phone)
+                ?? (!msg.fromMe ? msg.contactName : null) ?? null)
+          const chatName = isGroup ? (groupNamesMap.get(msg.chatJid) ?? msg.chatName ?? null) : null
 
           const metadata = msg.messageType === "audio"
             ? JSON.stringify({ messageKey: msg.messageKey, transcribed: false })

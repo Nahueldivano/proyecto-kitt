@@ -220,10 +220,15 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "sync_whatsapp",
-    description: "Sincroniza manualmente los mensajes recientes de WhatsApp desde Evolution API hacia la base local. Usalo SOLO cuando el usuario lo pida explícitamente ('actualizá WhatsApp', 'sincronizá', 'refrescá los chats'). En condiciones normales no hace falta: los mensajes entrantes se insertan en tiempo real vía webhook.",
+    description: "Sincroniza mensajes de WhatsApp desde Evolution API hacia la base local. Usalo cuando el usuario lo pida explícitamente ('actualizá WhatsApp', 'sincronizá', 'refrescá', 'revisá mis WSPs de hoy/esta semana'). days_back controla cuántos días hacia atrás traer (default 1 = últimas 24hs, máximo 7). Si el usuario pide 'de esta semana' usá 7, 'de hoy' usá 1.",
     input_schema: {
       type: "object" as const,
-      properties: {},
+      properties: {
+        days_back: {
+          type: "number",
+          description: "Días hacia atrás a sincronizar. 1 = últimas 24hs (default), máximo 7. Usar 7 si el usuario pide 'esta semana'.",
+        },
+      },
       required: [],
     },
   },
@@ -273,14 +278,16 @@ async function executeTool(
   toolInput: Record<string, unknown>,
   tenantId: string
 ): Promise<ToolCallResult> {
-  // Sync pasivo en background antes de cualquier lectura de WhatsApp.
-  // No bloquea — equivale al botón "Sincronizar chats" de Settings.
+  // Sync bloqueante antes de cualquier lectura de WhatsApp — garantiza datos frescos (últimas 24hs).
   if (
     toolName === "list_whatsapp_chats" ||
     toolName === "read_whatsapp_chat" ||
     toolName === "search_whatsapp_messages"
   ) {
-    import("@/lib/silentSync").then(({ silentSync }) => silentSync(tenantId)).catch(() => {})
+    try {
+      const { silentSync } = await import("@/lib/silentSync")
+      await silentSync(tenantId, 1)
+    } catch { /* no bloquear si falla el sync */ }
   }
 
   switch (toolName) {
@@ -631,9 +638,11 @@ async function executeTool(
 
     case "sync_whatsapp": {
       try {
+        const daysBack = Math.min(Math.max(Number(toolInput.days_back ?? 1), 1), 7)
         const { silentSync } = await import("@/lib/silentSync")
-        await silentSync(tenantId)
-        return { toolResult: "WhatsApp sincronizado." }
+        await silentSync(tenantId, daysBack)
+        const label = daysBack === 1 ? "las últimas 24 horas" : `los últimos ${daysBack} días`
+        return { toolResult: `WhatsApp sincronizado (${label}).` }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         return { toolResult: `No pude sincronizar WhatsApp: ${msg}` }
@@ -816,7 +825,7 @@ LO QUE ${assistantName} NO HACE
 - No inventa información. Si no sabe algo, lo dice sin rodeos.
 - No envía nada sin aprobación explícita del usuario.
 - No resume comunicaciones por iniciativa propia.
-- No sincroniza WhatsApp automáticamente. Los mensajes nuevos llegan al instante vía webhook; los datos en DB están actualizados. Solo usá la tool sync_whatsapp si el usuario lo pide explícitamente ("actualizá", "sincronizá", "refrescá").
+- Antes de leer chats de WhatsApp siempre sincroniza las últimas 24hs automáticamente. Si el usuario pide datos de más de un día ("esta semana", "últimos 3 días"), usá sync_whatsapp con el days_back apropiado ANTES de listar o leer chats.
 - No responde en otro idioma que no sea español.
 - No actúa fuera de lo que el usuario pidió.
 - No rellena respuestas con frases vacías ni con exceso de cortesía.
@@ -849,12 +858,19 @@ El usuario habla con una persona de confianza que resuelve cosas. No con un sist
 RESUMEN DE WHATSAPP
 
 Cuando el usuario pide un resumen de WhatsApp (hoy, esta semana, etc):
-1. Usá list_whatsapp_chats con days_back apropiado para obtener TODOS los chats activos en ese período.
-2. Leé TODOS los chats que devuelve la lista — no te detengas en los primeros. Usá read_whatsapp_chat para cada uno en paralelo si podés, o en secuencia.
-3. Solo después de leer todos, generá el resumen. Un resumen parcial es peor que uno completo que tarde un poco más.
-4. Si hay más de 15 chats, priorizá los que tienen mensajes más recientes y mencionalo.
+1. Si el usuario pide "de hoy" o "de las últimas horas": el sync de 24hs ya corrió automáticamente, podés ir directo a list_whatsapp_chats con days_back=1.
+   Si el usuario pide "de esta semana" o más de 1 día: primero llamá sync_whatsapp con days_back apropiado (máximo 7), luego list_whatsapp_chats.
+2. Usá list_whatsapp_chats con days_back apropiado para obtener TODOS los chats activos en ese período.
+3. Leé TODOS los chats que devuelve la lista — no te detengas en los primeros. Usá read_whatsapp_chat para cada uno en paralelo si podés, o en secuencia.
+4. Solo después de leer todos, generá el resumen. Un resumen parcial es peor que uno completo que tarde un poco más.
+5. Si hay más de 15 chats, priorizá los que tienen mensajes más recientes y mencionalo.
 
 MANEJO DE CONTACTOS DE WHATSAPP
+
+JIDs — formato correcto según tipo:
+- Contacto individual: número completo con código de país + "@s.whatsapp.net" (ej: 5491157589161@s.whatsapp.net)
+- Grupo: ID largo + "@g.us" (ej: 120363219876543210@g.us)
+- Nunca uses @lid ni @c.us para enviar — son IDs temporales internos. Siempre tomá el JID directamente de list_whatsapp_chats.
 
 Cuando el usuario menciona un contacto por nombre:
 1. Usá list_whatsapp_chats para encontrar el JID correcto. Tomá el JID del resultado directamente — ese es el número que hay que usar, no lo modifiques ni construyas uno de memoria.
