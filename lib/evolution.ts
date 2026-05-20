@@ -158,6 +158,27 @@ export async function sendTextMessage(
   }
 }
 
+export async function getOwnerJid(tenantId: string): Promise<string | null> {
+  try {
+    const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
+    const instanceName = getInstanceName(tenantId)
+
+    const res = await fetch(`${baseUrl}/instance/fetchInstances?instanceName=${instanceName}`, {
+      method: "GET",
+      headers,
+    })
+    if (!res.ok) return null
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await res.json() as any[]
+    if (!Array.isArray(data) || data.length === 0) return null
+    const owner = data[0]?.instance?.owner ?? data[0]?.owner
+    return owner ? String(owner) : null
+  } catch {
+    return null
+  }
+}
+
 export async function reconnect(tenantId: string): Promise<void> {
   const [baseUrl, headers] = await Promise.all([getBaseUrl(), getHeaders()])
   const instanceName = getInstanceName(tenantId)

@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { chat } from "@/lib/claude"
 import { buildReportContext } from "@/lib/reportContext"
+import { sendEmail } from "@/lib/gmail"
+import { sendTextMessage, getOwnerJid } from "@/lib/evolution"
+
+function htmlToWhatsAppText(html: string): string {
+  return html
+    .replace(/<h[1-3][^>]*>(.*?)<\/h[1-3]>/gi, "\n*$1*\n")
+    .replace(/<strong[^>]*>(.*?)<\/strong>/gi, "*$1*")
+    .replace(/<b[^>]*>(.*?)<\/b>/gi, "*$1*")
+    .replace(/<em[^>]*>(.*?)<\/em>/gi, "_$1_")
+    .replace(/<i[^>]*>(.*?)<\/i>/gi, "_$1_")
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, "• $1\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<tr[^>]*>/gi, "\n")
+    .replace(/<td[^>]*>(.*?)<\/td>/gi, "$1  ")
+    .replace(/<th[^>]*>(.*?)<\/th>/gi, "*$1*  ")
+    .replace(/<hr[^>]*>/gi, "\n─────────────\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
 
 interface ReportSchedule {
   id: string
@@ -77,6 +103,37 @@ Usá create_artifact con type="html". El HTML debe ser visualmente rico:
         const saved = await db.report.create({
           data: { tenantId: tenant.id, type: schedule.type, content: reportContent },
         })
+
+        // Enviar según deliveryMethod configurado
+        const sendEmail_ = schedule.deliveryMethod === "email" || schedule.deliveryMethod === "both"
+        const sendWa = schedule.deliveryMethod === "whatsapp" || schedule.deliveryMethod === "both"
+
+        if (sendEmail_) {
+          try {
+            const gmailConn = await db.gmailConnection.findUnique({
+              where: { tenantId: tenant.id },
+              select: { email: true },
+            })
+            if (gmailConn) {
+              const subject = schedule.emailSubject || `KITT — ${schedule.name}`
+              await sendEmail(tenant.id, gmailConn.email, subject, reportContent)
+            }
+          } catch (emailErr) {
+            console.error(`[cron/reports] email send failed for tenant ${tenant.id}:`, emailErr)
+          }
+        }
+
+        if (sendWa) {
+          try {
+            const ownerJid = await getOwnerJid(tenant.id)
+            if (ownerJid) {
+              const waText = `*📊 ${schedule.name}*\n\n${htmlToWhatsAppText(reportContent)}`
+              await sendTextMessage(tenant.id, ownerJid, waText)
+            }
+          } catch (waErr) {
+            console.error(`[cron/reports] whatsapp send failed for tenant ${tenant.id}:`, waErr)
+          }
+        }
 
         results.push({ tenantId: tenant.id, scheduleId: schedule.id, reportId: saved.id })
       } catch (err) {

@@ -175,15 +175,20 @@ export async function sendEmail(
 ): Promise<void> {
   const gmail = await getGmailClient(tenantId)
 
+  const isHtml = body.trimStart().startsWith("<")
+  const contentType = isHtml ? "text/html; charset=UTF-8" : "text/plain; charset=UTF-8"
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, "utf-8").toString("base64")}?=`
+
   const message = [
     `To: ${to}`,
-    `Subject: ${subject}`,
-    "Content-Type: text/plain; charset=utf-8",
+    `Subject: ${encodedSubject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: ${contentType}`,
     "",
     body,
   ].join("\n")
 
-  const encoded = Buffer.from(message)
+  const encoded = Buffer.from(message, "utf-8")
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -203,13 +208,20 @@ export async function replyToEmail(
 ): Promise<void> {
   const gmail = await getGmailClient(tenantId)
 
+  const isHtml = body.trimStart().startsWith("<")
+  const contentType = isHtml ? "text/html; charset=UTF-8" : "text/plain; charset=UTF-8"
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(`Re: ${subject}`, "utf-8").toString("base64")}?=`
+
   const message = [
     `To: ${to}`,
-    `Subject: Re: ${subject}`,
-    "Content-Type: text/plain; charset=utf-8",
-  ].join("\n") + "\n\n" + body
+    `Subject: ${encodedSubject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: ${contentType}`,
+    "",
+    body,
+  ].join("\n")
 
-  const encoded = Buffer.from(message)
+  const encoded = Buffer.from(message, "utf-8")
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
