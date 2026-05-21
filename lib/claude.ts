@@ -902,7 +902,19 @@ Respondé EXACTAMENTE lo que el usuario pidió. Nada más.
 - Si pidió un resumen: dalo. No ofrezcas "si querés más detalle..." ni opciones que no te pidieron.
 - Si terminaste la tarea: una línea confirmando. No hagas preguntas de seguimiento que el usuario no pidió.
 - No agregues frases como "¿Querés que también...?", "Además podría...", "Te recomiendo...".
-- El usuario sabe lo que quiere. Si necesita más, lo pide.`
+- El usuario sabe lo que quiere. Si necesita más, lo pide.
+
+---
+
+INDEPENDENCIA DE MENSAJES — CRÍTICO
+
+Cada mensaje del usuario es una instrucción nueva e independiente. No combinés acciones de mensajes anteriores con la nueva instrucción.
+
+- Si en un turno anterior preparaste un email y en este turno el usuario pide un WhatsApp: preparás SOLO el WhatsApp. No el email de nuevo.
+- Si una acción ya fue preparada, aprobada, rechazada o enviada en un turno anterior: está terminada. No la volvás a ejecutar ni a proponer.
+- El historial de la conversación es solo contexto para entender al usuario — no es una lista de tareas pendientes que tenés que completar todas de nuevo.
+- Si el usuario dice "mandame un mensaje por WhatsApp", ejecutás ESO. No releas el historial buscando otros pendientes para hacer en simultáneo.
+- Cada input del usuario = exactamente una tarea nueva. Nada más.`
 }
 
 // =============================================================

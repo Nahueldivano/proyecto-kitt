@@ -252,8 +252,23 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
 
         {/* ── NAV PRINCIPAL ── */}
         <nav className="px-2 py-1 space-y-0.5">
+          {/* Chat — siempre abre un chat nuevo al tocarlo */}
+          <button
+            onClick={newConversation}
+            className={cn(
+              "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors",
+              isChat
+                ? "bg-[hsl(var(--surface))] text-[hsl(var(--text))] font-medium shadow-sm"
+                : "text-[hsl(var(--text-2))] hover:bg-[hsl(var(--surface-2))] hover:text-[hsl(var(--text))]"
+            )}
+          >
+            <span className={isChat ? "text-[hsl(var(--accent))]" : "text-[hsl(var(--text-3))]"}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </span>
+            <span className="flex-1 text-left">Chat</span>
+          </button>
+
           {[
-            { href: "/chat", label: "Chat", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
             { href: "/contacts", label: "Contactos", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
             { href: "/whatsapp-db", label: "WhatsApp", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
               badge: waLive, badgeColor: "bg-green-500" },
