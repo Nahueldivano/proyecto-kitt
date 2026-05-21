@@ -102,6 +102,17 @@ export async function POST(req: NextRequest) {
   const until = bodyData.until ? new Date(String(bodyData.until)) : new Date()
   diagnostics.push(`historyDays=${historyDays}, since=${since.toISOString()}, until=${until.toISOString()}, whitelist=${JSON.stringify(whitelist)}`)
 
+  // Limpiar mensajes más viejos que 72hs antes de sincronizar
+  try {
+    const deleted = await db.$executeRawUnsafe(
+      `DELETE FROM "WhatsappMessage" WHERE "tenantId" = $1 AND "timestamp" < NOW() - INTERVAL '3 days'`,
+      tenantId
+    )
+    if (Number(deleted) > 0) diagnostics.push(`cleanup: ${deleted} mensajes viejos eliminados`)
+  } catch (e) {
+    diagnostics.push(`cleanup warning: ${e}`)
+  }
+
   // Cargar contactos y nombres de grupos en paralelo
   const [contactsMap, groupNamesMap] = await Promise.all([
     findContacts(tenantId),

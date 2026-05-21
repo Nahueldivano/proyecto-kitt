@@ -11,6 +11,12 @@ export async function silentSync(tenantId: string, daysBack?: number): Promise<v
 
   const since = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
 
+  // Limpiar mensajes más viejos que 72hs antes de sincronizar
+  db.$executeRawUnsafe(
+    `DELETE FROM "WhatsappMessage" WHERE "tenantId" = $1 AND "timestamp" < NOW() - INTERVAL '3 days'`,
+    tenantId
+  ).catch(() => {})
+
   const [contactsMap, groupNamesMap] = await Promise.all([
     findContacts(tenantId),
     findGroupNames(tenantId),
