@@ -1,13 +1,13 @@
 import { db } from "@/lib/db"
 import { findContacts, findGroupNames, findMessages, getStatus } from "@/lib/evolution"
 
-// daysBack: cuántos días hacia atrás sincronizar. Default: 1 (últimas 24hs). Máximo: 7.
+// daysBack: cuántos días hacia atrás sincronizar. Default: 1 (últimas 24hs). Máximo: 3 (72hs).
 export async function silentSync(tenantId: string, daysBack?: number): Promise<void> {
   const status = await getStatus(tenantId)
   if (status !== "connected") return
 
   const requestedDays = daysBack ?? 1
-  const historyDays = Math.min(Math.max(requestedDays, 1), 7)
+  const historyDays = Math.min(Math.max(requestedDays, 1), 3)
 
   const since = new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000)
 

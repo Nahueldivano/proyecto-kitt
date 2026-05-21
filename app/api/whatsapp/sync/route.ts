@@ -91,10 +91,10 @@ export async function POST(req: NextRequest) {
   const cfg = (tenant?.config ?? {}) as Record<string, unknown>
   const whitelist: string[] = Array.isArray(cfg.waContactWhitelist) ? (cfg.waContactWhitelist as string[]) : []
 
-  // Default: 1 día (últimas 24hs). Máximo permitido: 7 días.
-  // El botón manual puede pasar historyDays; sync conversacional igual (cap = 7).
+  // Default: 1 día (últimas 24hs). Máximo permitido: 3 días (72hs).
+  // El botón manual puede pasar historyDays; sync conversacional igual (cap = 3).
   const requestedDays = bodyData.historyDays ? Number(bodyData.historyDays) : 1
-  const historyDays = Math.min(Math.max(requestedDays, 1), 7)
+  const historyDays = Math.min(Math.max(requestedDays, 1), 3)
 
   const since = bodyData.since
     ? new Date(String(bodyData.since))

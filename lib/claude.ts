@@ -138,19 +138,19 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "list_whatsapp_chats",
-    description: "Lista los chats de WhatsApp sincronizados con su actividad reciente. Usalo primero para descubrir qué contactos y grupos están disponibles y obtener sus JIDs antes de leer conversaciones. Muestra: nombre, JID completo, cantidad de mensajes y último mensaje. Usá days_back para ver solo chats activos en los últimos N días.",
+    description: "Lista los chats de WhatsApp sincronizados con su actividad reciente. Usalo primero para descubrir qué contactos y grupos están disponibles y obtener sus JIDs antes de leer conversaciones. Muestra: nombre, JID completo, cantidad de mensajes y último mensaje. Por defecto muestra chats activos en las últimas 72hs (days_back=3).",
     input_schema: {
       type: "object" as const,
       properties: {
         limit: { type: "number", description: "Máximo de chats a listar (default 50)" },
-        days_back: { type: "number", description: "Solo mostrar chats con actividad en los últimos N días. Omitir para ver todos." },
+        days_back: { type: "number", description: "Solo mostrar chats con actividad en los últimos N días (default 3, máximo 3)." },
       },
       required: [],
     },
   },
   {
     name: "read_whatsapp_chat",
-    description: "Lee los mensajes de un chat de WhatsApp (1:1 o grupo) en orden cronológico. Acepta el JID exacto (ej: 5491157589161@s.whatsapp.net) o el nombre/número del contacto para búsqueda automática. Usá days_back para traer todos los mensajes dentro del período relevante — si el usuario dice 'esta semana' usá 7, 'este mes' usá 30. Default: 7 días.",
+    description: "Lee los mensajes de un chat de WhatsApp (1:1 o grupo) en orden cronológico. Acepta el JID exacto (ej: 5491157589161@s.whatsapp.net) o el nombre/número del contacto para búsqueda automática. Default: 3 días (72hs). Máximo: 3 días.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -160,7 +160,7 @@ const TOOLS: Anthropic.Tool[] = [
         },
         days_back: {
           type: "number",
-          description: "Traer mensajes de los últimos N días (default 7). Ajustá según lo que pida el usuario.",
+          description: "Traer mensajes de los últimos N días (default 3, máximo 3).",
         },
       },
       required: ["chat_jid"],
@@ -174,7 +174,7 @@ const TOOLS: Anthropic.Tool[] = [
       properties: {
         query: { type: "string", description: "Texto o palabra clave a buscar (búsqueda parcial, sin distinción de mayúsculas)" },
         chat_jid: { type: "string", description: "Filtrar por JID de un chat específico (opcional)" },
-        days_back: { type: "number", description: "Solo buscar en mensajes de los últimos N días. Omitir para buscar en todo el historial." },
+        days_back: { type: "number", description: "Solo buscar en mensajes de los últimos N días (default 3, máximo 3)." },
         limit: { type: "number", description: "Máximo de resultados (default 100)" },
       },
       required: ["query"],
@@ -220,13 +220,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "sync_whatsapp",
-    description: "Sincroniza mensajes de WhatsApp desde Evolution API hacia la base local. Usalo cuando el usuario lo pida explícitamente ('actualizá WhatsApp', 'sincronizá', 'refrescá', 'revisá mis WSPs de hoy/esta semana'). days_back controla cuántos días hacia atrás traer (default 1 = últimas 24hs, máximo 7). Si el usuario pide 'de esta semana' usá 7, 'de hoy' usá 1.",
+    description: "Sincroniza mensajes de WhatsApp desde Evolution API hacia la base local. Usalo cuando el usuario lo pida explícitamente ('actualizá WhatsApp', 'sincronizá', 'refrescá'). days_back controla cuántos días hacia atrás traer (default 1 = últimas 24hs, máximo 3 = 72hs).",
     input_schema: {
       type: "object" as const,
       properties: {
         days_back: {
           type: "number",
-          description: "Días hacia atrás a sincronizar. 1 = últimas 24hs (default), máximo 7. Usar 7 si el usuario pide 'esta semana'.",
+          description: "Días hacia atrás a sincronizar. 1 = últimas 24hs (default), máximo 3 (72hs).",
         },
       },
       required: [],
@@ -362,11 +362,10 @@ async function executeTool(
 
     case "list_whatsapp_chats": {
       const limit = (toolInput.limit as number) ?? 50
-      const daysBack = toolInput.days_back as number | undefined
+      const rawDays = (toolInput.days_back as number | undefined) ?? 3
+      const daysBack = Math.min(Math.max(rawDays, 1), 3)
       // Seguro: daysBack viene validado como number antes de interpolarse
-      const havingClause = daysBack
-        ? `HAVING MAX("timestamp") >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
-        : ""
+      const havingClause = `HAVING MAX("timestamp") >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
 
       // Cargar tabla Contact para resolver @lid → phone real antes de agrupar
       const contactPhoneMap = await db.$queryRawUnsafe<Array<{ chatJid: string; phone: string | null }>>(`
@@ -478,7 +477,7 @@ async function executeTool(
 
     case "read_whatsapp_chat": {
       const chatInput = String(toolInput.chat_jid ?? "")
-      const daysBack = (toolInput.days_back as number) ?? 7
+      const daysBack = Math.min((toolInput.days_back as number) ?? 3, 3)
 
       // Resolver JID: si no tiene "@", buscar por nombre o número parcial
       let chatJid = chatInput
@@ -523,7 +522,7 @@ async function executeTool(
       `, tenantId, isGroup ? chatJid : phone)
 
       if (messages.length === 0) {
-        return { toolResult: `No se encontraron mensajes de "${chatInput}" en los últimos ${daysBack} días. Probá con un days_back mayor o usá list_whatsapp_chats para verificar el JID.` }
+        return { toolResult: `No se encontraron mensajes de "${chatInput}" en las últimas 72hs. Verificá el JID con list_whatsapp_chats o el chat puede no tener actividad reciente.` }
       }
 
       const chatLabel = messages.find(m => m.chatName)?.chatName ?? messages.find(m => m.contactName)?.contactName ?? chatJid
@@ -543,12 +542,11 @@ async function executeTool(
     case "search_whatsapp_messages": {
       const query = String(toolInput.query ?? "")
       const chatJidFilter = toolInput.chat_jid as string | undefined
-      const daysBack = toolInput.days_back as number | undefined
+      const rawSearchDays = (toolInput.days_back as number | undefined) ?? 3
+      const daysBack = Math.min(Math.max(rawSearchDays, 1), 3)
       const limit = (toolInput.limit as number) ?? 100
       // Seguro: daysBack viene validado como number antes de interpolarse
-      const dateCondition = daysBack
-        ? `AND "timestamp" >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
-        : ""
+      const dateCondition = `AND "timestamp" >= NOW() - INTERVAL '${Math.floor(daysBack)} days'`
 
       const messages = await db.$queryRawUnsafe<Array<{
         chatJid: string
@@ -638,7 +636,7 @@ async function executeTool(
 
     case "sync_whatsapp": {
       try {
-        const daysBack = Math.min(Math.max(Number(toolInput.days_back ?? 1), 1), 7)
+        const daysBack = Math.min(Math.max(Number(toolInput.days_back ?? 1), 1), 3)
         const { silentSync } = await import("@/lib/silentSync")
         await silentSync(tenantId, daysBack)
         const label = daysBack === 1 ? "las últimas 24 horas" : `los últimos ${daysBack} días`
@@ -825,7 +823,7 @@ LO QUE ${assistantName} NO HACE
 - No inventa información. Si no sabe algo, lo dice sin rodeos.
 - No envía nada sin aprobación explícita del usuario.
 - No resume comunicaciones por iniciativa propia.
-- Antes de leer chats de WhatsApp siempre sincroniza las últimas 24hs automáticamente. Si el usuario pide datos de más de un día ("esta semana", "últimos 3 días"), usá sync_whatsapp con el days_back apropiado ANTES de listar o leer chats.
+- Antes de leer chats de WhatsApp siempre sincroniza las últimas 24hs automáticamente. Si el usuario pide datos de más de un día usá sync_whatsapp con days_back=3 (máximo disponible = 72hs) ANTES de listar o leer chats.
 - No responde en otro idioma que no sea español.
 - No actúa fuera de lo que el usuario pidió.
 - No rellena respuestas con frases vacías ni con exceso de cortesía.
@@ -859,7 +857,7 @@ RESUMEN DE WHATSAPP
 
 Cuando el usuario pide un resumen de WhatsApp (hoy, esta semana, etc):
 1. Si el usuario pide "de hoy" o "de las últimas horas": el sync de 24hs ya corrió automáticamente, podés ir directo a list_whatsapp_chats con days_back=1.
-   Si el usuario pide "de esta semana" o más de 1 día: primero llamá sync_whatsapp con days_back apropiado (máximo 7), luego list_whatsapp_chats.
+   Si el usuario pide "de los últimos días": primero llamá sync_whatsapp con days_back=3 (máximo disponible), luego list_whatsapp_chats con days_back=3.
 2. Usá list_whatsapp_chats con days_back apropiado para obtener TODOS los chats activos en ese período.
 3. Leé TODOS los chats que devuelve la lista — no te detengas en los primeros. Usá read_whatsapp_chat para cada uno en paralelo si podés, o en secuencia.
 4. Solo después de leer todos, generá el resumen. Un resumen parcial es peor que uno completo que tarde un poco más.
