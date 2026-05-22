@@ -1,10 +1,20 @@
 import { db } from "@/lib/db"
 import { findContacts, findGroupNames, findMessages, getStatus } from "@/lib/evolution"
 
+// Cooldown por tenant: evita re-sincronizar si ya corrió hace menos de 5 minutos.
+const lastSyncTime = new Map<string, number>()
+const SYNC_COOLDOWN_MS = 5 * 60 * 1000
+
 // daysBack: cuántos días hacia atrás sincronizar. Default: 1 (últimas 24hs). Máximo: 3 (72hs).
 export async function silentSync(tenantId: string, daysBack?: number): Promise<void> {
+  const now = Date.now()
+  const last = lastSyncTime.get(tenantId) ?? 0
+  if (now - last < SYNC_COOLDOWN_MS) return
+
   const status = await getStatus(tenantId)
   if (status !== "connected") return
+
+  lastSyncTime.set(tenantId, now)
 
   const requestedDays = daysBack ?? 1
   const historyDays = Math.min(Math.max(requestedDays, 1), 3)
