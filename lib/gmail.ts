@@ -80,13 +80,23 @@ export interface EmailFull extends EmailSummary {
 
 export async function listUnreadEmails(
   tenantId: string,
-  maxResults = 10
+  maxResults = 10,
+  includeRead = false,
+  daysBack?: number
 ): Promise<EmailSummary[]> {
   const gmail = await getGmailClient(tenantId)
 
+  let q = includeRead ? "" : "is:unread"
+  if (daysBack && daysBack > 0) {
+    const after = new Date()
+    after.setDate(after.getDate() - daysBack)
+    const afterStr = `${after.getFullYear()}/${String(after.getMonth() + 1).padStart(2, "0")}/${String(after.getDate()).padStart(2, "0")}`
+    q = q ? `${q} after:${afterStr}` : `after:${afterStr}`
+  }
+
   const list = await gmail.users.messages.list({
     userId: "me",
-    q: "is:unread",
+    ...(q ? { q } : {}),
     maxResults,
   })
 

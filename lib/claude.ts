@@ -83,13 +83,21 @@ function getThinkingPhrase(toolName: string): string {
 const TOOLS: Anthropic.Tool[] = [
   {
     name: "list_unread_emails",
-    description: "Lista los emails no leídos de la casilla de Gmail conectada. Devuelve ID, remitente, asunto, fecha y resumen de cada email. Usá el ID devuelto para leer el contenido completo con read_email.",
+    description: "Lista emails de la casilla de Gmail conectada. Por defecto trae solo los no leídos, pero con include_read=true trae todos (leídos y no leídos). Usá days_back para acotar por fecha. Devuelve ID, remitente, asunto, fecha y resumen. Usá el ID para leer el contenido completo con read_email.",
     input_schema: {
       type: "object" as const,
       properties: {
         max_results: {
           type: "number",
           description: "Máximo de emails a listar (default 10)",
+        },
+        include_read: {
+          type: "boolean",
+          description: "Si es true, incluye emails ya leídos además de los no leídos (default false)",
+        },
+        days_back: {
+          type: "number",
+          description: "Solo traer emails de los últimos N días (opcional)",
         },
       },
       required: [],
@@ -293,7 +301,9 @@ async function executeTool(
   switch (toolName) {
     case "list_unread_emails": {
       const maxResults = (toolInput.max_results as number) ?? 10
-      const emails = await listUnreadEmails(tenantId, maxResults)
+      const includeRead = (toolInput.include_read as boolean) ?? false
+      const daysBack = toolInput.days_back as number | undefined
+      const emails = await listUnreadEmails(tenantId, maxResults, includeRead, daysBack)
       if (emails.length === 0) {
         return { toolResult: "No hay emails no leídos en este momento." }
       }
@@ -897,6 +907,20 @@ Cuando el usuario pide un resumen de WhatsApp (hoy, esta semana, etc):
 3. Leé TODOS los chats que devuelve la lista — no te detengas en los primeros. Usá read_whatsapp_chat para cada uno en paralelo si podés, o en secuencia.
 4. Solo después de leer todos, generá el resumen. Un resumen parcial es peor que uno completo que tarde un poco más.
 5. Si hay más de 15 chats, priorizá los que tienen mensajes más recientes y mencionalo.
+
+EMAILS
+
+Nunca respondas sobre emails desde memoria o contexto anterior. Siempre llamá list_unread_emails para traer datos frescos de Gmail.
+
+Cuando el usuario pide ver, resumir o consultar sus emails:
+- Emails no leídos: list_unread_emails con include_read=false (default).
+- Emails recientes (leídos o no): list_unread_emails con include_read=true y days_back según el período pedido (hoy=1, esta semana=7, etc.).
+- Si el resultado está vacío y pedía no leídos: informá que no hay no leídos y ofrecé mostrar los recientes con include_read=true.
+- Para leer el contenido completo de uno: read_email con el ID.
+
+Nunca asumas qué emails tiene el usuario basándote en conversaciones anteriores. Cada consulta de emails = llamada fresca a Gmail.
+
+---
 
 MANEJO DE CONTACTOS DE WHATSAPP
 
