@@ -86,6 +86,27 @@ export async function POST(req: NextRequest) {
         .join("")
       userContent = message + filesText
     }
+
+    // Silent email sync: si el mensaje menciona emails, pre-fetchar de Gmail y
+    // adjuntar los datos frescos al mensaje del usuario — igual que silentSync de WhatsApp
+    // pero sin DB local (pull directo de Gmail API).
+    const emailIntent = /email|mail|gmail|correo|bandeja|inbox/i
+    if (emailIntent.test(userContent)) {
+      try {
+        const { listUnreadEmails } = await import("@/lib/gmail")
+        const emails = await listUnreadEmails(tenantId, 20, true, 7)
+        if (emails.length > 0) {
+          const ts = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+          const emailList = emails
+            .map((e, i) => `${i + 1}. ID:${e.id} | De: ${e.from} | Asunto: ${e.subject} | ${e.date}`)
+            .join("\n")
+          userContent += `\n\n[Emails sincronizados automáticamente — ${ts}:\n${emailList}]`
+        }
+      } catch {
+        // Gmail no conectado o error de auth — continuar sin datos de email
+      }
+    }
+
     history.push({ role: "user", content: userContent })
 
     // Confirmación conversacional: el usuario dice "sí/dale/mandalo/sí manda/etc"

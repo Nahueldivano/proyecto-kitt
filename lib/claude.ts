@@ -300,9 +300,9 @@ async function executeTool(
 
   switch (toolName) {
     case "list_unread_emails": {
-      const maxResults = (toolInput.max_results as number) ?? 10
-      const includeRead = (toolInput.include_read as boolean) ?? false
-      const daysBack = toolInput.days_back as number | undefined
+      const maxResults = (toolInput.max_results as number) ?? 20
+      const includeRead = (toolInput.include_read as boolean) ?? true
+      const daysBack = (toolInput.days_back as number | undefined) ?? 7
       const emails = await listUnreadEmails(tenantId, maxResults, includeRead, daysBack)
       if (emails.length === 0) {
         return { toolResult: "No hay emails no leídos en este momento." }
