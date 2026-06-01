@@ -1,7 +1,6 @@
 # dependencies
 /node_modules
-video/node_modules
-video/out
+video/
 /.pnp
 .pnp.js
 .yarn/install-state.gz
