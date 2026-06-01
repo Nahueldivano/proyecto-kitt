@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
 import { signIn } from "next-auth/react"
+import { KittLogo } from "@/components/ui/KittLogo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -62,7 +62,7 @@ export default function RegisterPage() {
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="flex justify-center mb-3">
-            <Image src="/kitt-logo.png" alt="KITT" width={120} height={97} className="object-contain" />
+            <KittLogo size={96} />
           </div>
           <h1 className="text-xl font-bold text-[hsl(var(--text))]">Crear cuenta</h1>
           <p className="text-sm text-[hsl(var(--text-3))] mt-1">

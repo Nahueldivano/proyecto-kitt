@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
 import { signIn } from "next-auth/react"
+import { KittLogo } from "@/components/ui/KittLogo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -49,7 +49,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-6 text-center">
           <div className="flex justify-center mb-3">
-            <Image src="/kitt-logo.png" alt="KITT" width={100} height={80} className="object-contain" />
+            <KittLogo size={80} />
           </div>
           <p className="text-sm text-[hsl(var(--text-3))]">
             Tu asistente empresarial de IA

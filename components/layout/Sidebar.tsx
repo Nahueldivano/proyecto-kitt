@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, useRef, useCallback } from "react"
-import Image from "next/image"
 import Link from "next/link"
+import { KittLogo } from "@/components/ui/KittLogo"
 import { usePathname, useRouter } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
 import { ThemeToggle } from "@/components/ui/ThemeToggle"
@@ -190,6 +190,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
   }
 
   function openConversation(id: string) {
+    reset()
     setConversationId(id)
     router.push("/chat")
   }
@@ -206,7 +207,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
     return (
       <aside className="hidden md:flex flex-col w-14 border-r border-[hsl(var(--border))] bg-[hsl(var(--surface))] h-full items-center py-4 gap-4">
         <button onClick={() => setCollapsed(false)} className="flex items-center justify-center">
-          <Image src="/kitt-logo.png" alt="KITT" width={32} height={26} className="object-contain" />
+          <KittLogo size={32} />
         </button>
         <button onClick={newConversation} className="text-[hsl(var(--text-3))] hover:text-[hsl(var(--text))]" title="Nueva conversación">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -227,7 +228,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
         {/* ── TOP: Logo + Nuevo chat + colapsar ── */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <div className="flex items-center gap-2">
-            <Image src="/kitt-logo.png" alt="KITT" width={28} height={23} className="object-contain" />
+            <KittLogo size={28} />
             <span className="text-sm font-semibold text-[hsl(var(--text))] tracking-[-0.03em]">KITT</span>
           </div>
           <div className="flex items-center gap-1">

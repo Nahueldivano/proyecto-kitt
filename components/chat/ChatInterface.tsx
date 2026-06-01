@@ -20,26 +20,25 @@ export function ChatInterface() {
   // Frase actual del estado "pensando" — null cuando ya está streameando texto
   const [thinkingPhase, setThinkingPhase] = useState<string | null>(null)
 
-  // Si hay un conversationId en el store, cargar mensajes al montar
+  // Cargar mensajes cuando cambia el conversationId
   useEffect(() => {
-    if (conversationId && messages.length === 0) {
-      fetch(`/api/conversations/${conversationId}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.messages) {
-            for (const m of d.messages) {
-              addMessage({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                type: m.type,
-                createdAt: new Date(m.createdAt),
-              })
-            }
+    if (!conversationId) return
+    fetch(`/api/conversations/${conversationId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.messages) {
+          for (const m of d.messages) {
+            addMessage({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              type: m.type,
+              createdAt: new Date(m.createdAt),
+            })
           }
-        })
-        .catch(() => {})
-    }
+        }
+      })
+      .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
 
