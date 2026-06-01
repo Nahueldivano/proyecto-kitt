@@ -20,27 +20,6 @@ export function ChatInterface() {
   // Frase actual del estado "pensando" — null cuando ya está streameando texto
   const [thinkingPhase, setThinkingPhase] = useState<string | null>(null)
 
-  // Cargar mensajes cuando cambia el conversationId
-  useEffect(() => {
-    if (!conversationId) return
-    fetch(`/api/conversations/${conversationId}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.messages) {
-          for (const m of d.messages) {
-            addMessage({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              type: m.type,
-              createdAt: new Date(m.createdAt),
-            })
-          }
-        }
-      })
-      .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId])
 
   const handleSend = useCallback(
     async (text: string) => {

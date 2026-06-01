@@ -58,7 +58,7 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
-  const { reset, setConversationId } = useChatStore()
+  const { reset, setConversationId, loadMessages } = useChatStore()
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
@@ -189,10 +189,25 @@ export function Sidebar({ waConnected = false, gmailConnected = false }: Sidebar
     }
   }
 
-  function openConversation(id: string) {
+  async function openConversation(id: string) {
     reset()
     setConversationId(id)
     router.push("/chat")
+    try {
+      const res = await fetch(`/api/conversations/${id}`)
+      const data = await res.json()
+      if (data.messages) {
+        loadMessages(
+          data.messages.map((m: { id: string; role: "user" | "assistant"; content: string; type?: "text" | "artifact"; createdAt: string }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            type: m.type,
+            createdAt: new Date(m.createdAt),
+          }))
+        )
+      }
+    } catch {}
   }
 
   function newConversation() {

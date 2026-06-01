@@ -37,6 +37,7 @@ interface ChatStore {
   attachedFiles: AttachedFile[]
 
   addMessage: (msg: ChatMessage) => void
+  loadMessages: (msgs: ChatMessage[]) => void
   updateLastMessage: (content: string) => void
   patchLastMessage: (patch: Partial<ChatMessage>) => void
   setArtifact: (artifact: Artifact | null) => void
@@ -65,6 +66,8 @@ export const useChatStore = create<ChatStore>()(
 
       addMessage: (msg) =>
         set((state) => ({ messages: [...state.messages, msg] })),
+
+      loadMessages: (msgs) => set({ messages: msgs }),
 
       updateLastMessage: (content) =>
         set((state) => {
